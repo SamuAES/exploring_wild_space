@@ -1,0 +1,7 @@
+path: /home/win/GitHub/exploring_wild_space/object_tracking/data
+train: train/images
+val: valid/images
+
+nc: 2
+names: ['bird', 'stick']
+
