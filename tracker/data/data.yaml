@@ -1,4 +1,4 @@
-path: /home/win/GitHub/exploring_wild_space/object_tracking/data
+path: /home/win/GitHub/exploring_wild_space/tracker/data
 train: train/images
 val: valid/images
 
