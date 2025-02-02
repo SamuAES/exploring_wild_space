@@ -3,6 +3,10 @@ from ultralytics import YOLO
 name = "CAGE_050721_HA70384_exploration_IB"
 
 model = YOLO("custom_yolo11n.pt")
+
+# Run detection on each frame of the video.
+# If not stream=False, most likely you will run out of memory.
+
 #results = model(f"videos/videos/{name}.mp4", stream=True)
 
 # n=0
