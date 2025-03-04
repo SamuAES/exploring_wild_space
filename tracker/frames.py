@@ -18,6 +18,8 @@ def load_video(video_filepath:str):
         print("frame width:", vcap.get(cv2.CAP_PROP_FRAME_WIDTH))
         print("frame height:", vcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         print("fps:", vcap.get(cv2.CAP_PROP_FPS))
+    else:
+        raise ValueError("VideoCapture did not succeed")
     cv2.destroyAllWindows()
     return vcap
 
