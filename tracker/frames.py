@@ -34,7 +34,7 @@ def read_video(video_capture:cv2.VideoCapture, model_path:str):
 
     Returns
     -------
-    Generator of Results objects.
+    Generator that yields a dictionary per frame.
     """
     model = YOLO(model_path)
 
@@ -42,7 +42,7 @@ def read_video(video_capture:cv2.VideoCapture, model_path:str):
         retval, frame = video_capture.read() # Read one frame from video
         if not retval:
             break
-        results = model(frame, stream=True) # Run YOLO detectino on frame
+        results = model(frame, stream=True) # Run YOLO detection on frame
         
         for result in results:
             class_names = result.names # class names

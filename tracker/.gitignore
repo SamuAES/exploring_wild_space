@@ -1,3 +1,5 @@
 .venv
+__pycache__
 videos
-custom_yolo11n_sample.mp4
+custom_yolo_training_data
+data
