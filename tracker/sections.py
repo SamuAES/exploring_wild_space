@@ -11,7 +11,7 @@ def assign_section_ys(result):
     Returns
     -------
     dict
-        Updated dictionary with section information.
+        Updated dictionary with section_y information.
     """
     updated_result = {}
     for key, value in result.items():
@@ -23,6 +23,32 @@ def assign_section_ys(result):
                 value['section_y'] = 'middle'
             else:
                 value['section_y'] = 'bottom'
+        updated_result[key] = value
+    return updated_result
+
+def assign_section_xs(result):
+    """
+    Assign sections to birds based on x-coordinate averages relative to the wall x-coordinate.
+    
+    Parameters
+    ----------
+    result : dict
+        Dictionary containing bounding box information.
+    
+    Returns
+    -------
+    dict
+        Updated dictionary with section_x information.
+    """
+    updated_result = {}
+    for key, value in result.items():
+        if value['class'] == 'bird':
+            wall_x = next((value['x1'] + value['x2']) / 2 for key, value in result.items() if value['class'] == 'wall')
+            x_avg = (value['x1'] + value['x2']) / 2
+            if x_avg < wall_x:
+                value['section_x'] = 'left'
+            else:
+                value['section_x'] = 'right'
         updated_result[key] = value
     return updated_result
 
@@ -41,10 +67,12 @@ def count_frames_by_section(result):
     dict
         Dictionary with the count for each section.
     """
-    frame_counts = {'top': 0, 'middle': 0, 'bottom': 0}
+    frame_counts = {'top': 0, 'middle': 0, 'bottom': 0, 'left': 0, 'right': 0}
     for value in result.values():
         if 'section_y' in value:
             frame_counts[value['section_y']] += 1
+        if 'section_x' in value:
+            frame_counts[value['section_x']] += 1
             break # only count the first detected bird
     
     return frame_counts
