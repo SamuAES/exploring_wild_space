@@ -26,7 +26,7 @@ def initialize_coordinates(video_name):
     # for tracking 5perches, make a set of visible perch numbers
     five_perches_set = set()
     for i in range(5):
-        print(p_xs[0,i])
+        #print(p_xs[0,i])
         if not np.isnan(p_xs[0,i]):
             five_perches_set.add(i+1)
     
