@@ -14,7 +14,7 @@ def initialize_coordinates(video_name):
 
     # fill in first x-coordinates from manual annotations
     master_file = "masterfile_20202021_LOOPY(Coordinates_xPerches).csv"
-    df = pd.read_csv(f"../../{master_file}") # relative filepath
+    df = pd.read_csv(f"{master_file}") # relative filepath
     df = df[df["VIDEO TITLE"]==video_name]
     coords = np.array([df[f"X PERCH{i+1}"] for i in range(8)]).T[0] # get coordinates
     # check if annotation goes from left to right or right to left; flip them if right to left
