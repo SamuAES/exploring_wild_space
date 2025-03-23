@@ -1,7 +1,6 @@
 from os.path import basename
 from ultralytics import YOLO
 import cv2
-from tqdm import tqdm
 
 def load_video(video_filepath:str):
     """
@@ -40,7 +39,6 @@ def read_video(video_capture:cv2.VideoCapture, model_path:str):
     Generator that yields a dictionary per frame.
     """
     model = YOLO(model_path)
-    frame_count = video_capture.get(cv2.CAP_PROP_FRAME_COUNT)
     while True:
         retval, frame = video_capture.read() # Read one frame from video
         if not retval:
