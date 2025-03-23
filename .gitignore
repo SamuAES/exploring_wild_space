@@ -1,0 +1,6 @@
+.venv
+__pycache__
+original_videos/
+demo_videos/
+frames/
+tmp.ipynb
