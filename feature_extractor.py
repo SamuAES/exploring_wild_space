@@ -1,4 +1,4 @@
-from utils.frames import load_video, read_video
+from utils.frames import *
 from utils.perching_functions import *
 from utils.movement_functions import *
 from utils.sections import *
@@ -281,12 +281,11 @@ def preprocess_data(df: pd.DataFrame, w: int):
         df_new[col] = data
     return df_new
 
-
-video_id = "HE21355_090721_21NB21"
+video_id = "HE21362_100721_21JJ32"
 video_directory = "data/original_videos"
 model_path = "yolo/custom_yolo11n_v2.pt"
-frame_count = 10 # How many frames to analyse if larger than video frame count then count all frames
+frame_count = np.inf # How many frames to analyse if larger than video frame count then count all frames
 
 
 res = extract(video_id, video_directory, model_path, frame_count=frame_count)
-res.to_csv(f"data/features/{video_id}_test.csv", header = True, index = False)
+res.to_csv(f"data/features/{video_id}_testi1.csv", header = True, index = False)
