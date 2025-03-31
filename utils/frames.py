@@ -149,12 +149,12 @@ def process_raw_data(data:dict):
 
 
 if __name__=="__main__":
-    video_path = "../data/original_videos/HE21362_100721_21JJ32_exploration_IB.mp4"
-    save_path = "../data/raw_data/HE21362_100721_21JJ32_exploration_IB.json"
-    video_id = "HE21362_100721_21JJ32"
+    video_path = "../../videos/CAGE_220520_HA70339_exploration_IB.mp4"
+    save_path = "../data/raw_data/CAGE_220520_HA70339_exploration_IB.json"
+    video_id = "CAGE_220520_HA70339_exploration_IB"
     video_directory = "data/original_videos"
     model_path = "../yolo/custom_yolo11n_v2.pt"
-    max_frames = 10 # How many frames to analyse if larger than video frame count then count all frames
+    max_frames = 100000 # How many frames to analyse if larger than video frame count then count all frames
     read_video_and_save_frames_to_json(video_path, save_path, model_path, max_frames)
     raw_dict = load_json_to_dict(save_path)
     bird_df, wall_df, fence_df, perch_df = process_raw_data(raw_dict)

@@ -2,6 +2,7 @@ import numpy as np
 import copy
 import pandas as pd
 import re
+from scipy import stats
 
 def initialize_coordinates(video_name):
 
@@ -13,7 +14,7 @@ def initialize_coordinates(video_name):
     w_xs[:] = np.nan # initialize as NaNs
 
     # fill in first x-coordinates from manual annotations
-    master_file = "data/masterfile_20202021_LOOPY(Coordinates_xPerches).csv"
+    master_file = "./data/masterfile_20202021_LOOPY(Coordinates_xPerches).csv"
     df = pd.read_csv(f"{master_file}") # relative filepath
     df = df[df["VIDEO TITLE"]==video_name]
     coords = np.array([df[f"X PERCH{i+1}"] for i in range(8)]).T[0] # get coordinates
@@ -185,7 +186,18 @@ def compute_ground_and_fence(status, fps):
     fence = np.sum(status==-1)/fps
     ground = np.sum(status==-2)/fps
     return ground, fence
+
+def smooth_bird_action(results):
+    results_length = len(results)
+    smoothed_results = np.zeros(results_length)
     
+    for i in range(results_length):
+        if i < 5:
+            smoothed_results[i] = int(stats.mode(results[0: i + 5])[0])
+        else:
+            smoothed_results[i] = int(stats.mode(results[i - 5: i + 5])[0])
+    
+    return smoothed_results
 
 if __name__=="__main__":
 
