@@ -1,4 +1,74 @@
+from .frames import *
+
 import numpy as np
+
+
+def extract_bird_and_wall_coordinates(json_filepath, frame_count):
+    """
+    Extracts coordinates of the bird and wall from a json file. If multiple
+    bird or wall instances are detected in a single frame, selects the most
+    confident one. If no bird or wall is detected in a frame, returns NaN.
+
+    Parameters
+    ----------
+    json_filepath : str
+        Path to json file.
+    frame_count : int
+        Number of frames to analyse.
+
+    Returns
+    -------
+    bird_x, bird_y, wall_x, wall_y : tuple
+        Tuple of arrays containing bird and wall position data.
+    """
+    # Load json file as dict
+    dict_full = load_json_to_dict(json_filepath)
+    # Initialize arrays
+    bird_x = np.zeros(frame_count)
+    bird_y = np.zeros(frame_count)
+    wall_x = np.zeros(frame_count)
+    wall_y = np.zeros(frame_count)
+    # Loop over frames
+    for index in range(frame_count):
+        # Pick dict corresponding to current frame
+        key = f"frame{index + 1}"
+        dict_tmp = dict_full[key]
+        # Select bird and wall instances from the full dictionary
+        bird_list = []
+        wall_list = []
+        for key, value in dict_tmp.items():
+            if value.get("class") == "bird":
+                bird_list.append(value)
+            elif value.get("class") == "wall":
+                wall_list.append(value)
+        # Loop over all bird detections and select the most confident one
+        if len(bird_list) > 0:
+            prev_conf = 0
+            for bird in bird_list:
+                curr_conf = bird["confidence"]
+                if curr_conf > prev_conf:
+                    bird_x[index] = int((bird["x1"] + bird["x2"]) / 2)
+                    bird_y[index] = int((bird["y1"] + bird["y2"]) / 2)
+                prev_conf = curr_conf
+        # If no bird was detected, assign NaNs
+        else:
+            bird_x[index] = np.nan
+            bird_y[index] = np.nan
+        # Loop over all wall detections and select the most confident one
+        if len(wall_list) > 0:
+            prev_conf = 0
+            for wall in wall_list:
+                curr_conf = wall["confidence"]
+                if curr_conf > prev_conf:
+                    wall_x[index] = int((wall["x1"] + wall["x2"]) / 2)
+                    wall_y[index] = int((wall["y1"] + wall["y2"]) / 2)
+                prev_conf = curr_conf
+        # If no wall was detected, assign NaNs
+        else:
+            wall_x[index] = np.nan
+            wall_y[index] = np.nan
+    return bird_x, bird_y, wall_x, wall_y
+
 
 def sliding_average(x: np.array, window_size: int = 15):
     """
@@ -14,11 +84,16 @@ def sliding_average(x: np.array, window_size: int = 15):
     Returns
     -------
     res : np.array
-        Array with shape (n - (window_size/2) - 0.5,) containing the sliding averages.
-        Edge elements are omitted for now.
+        Array with shape (n,) containing the sliding averages.
     """
     assert window_size % 2 == 1, "Window size must be odd."
-    return np.array([np.mean(x[i:i + window_size]) for i in range(len(x) - window_size + 1)])
+    half_window = window_size // 2
+    # Pad the array using reflection at the edges
+    padded_x = np.pad(x, pad_width = half_window, mode = 'reflect')
+    # Compute the moving average using a sliding window
+    res = np.convolve(padded_x, np.ones(window_size) / window_size, mode='valid')
+    return res
+
 
 def compute_distance(x: np.ndarray, y: np.ndarray):
     """
@@ -40,6 +115,7 @@ def compute_distance(x: np.ndarray, y: np.ndarray):
     dy = np.diff(y)
     d = np.sqrt(dx ** 2 + dy ** 2)
     return np.sum(d)
+
 
 def compute_speed(x: np.ndarray, y: np.ndarray, dt: float):
     """
@@ -63,6 +139,7 @@ def compute_speed(x: np.ndarray, y: np.ndarray, dt: float):
     dy = np.diff(y)
     d = np.sqrt(dx ** 2 + dy ** 2)
     return d / dt
+
 
 def count_threshold_crossings(x: np.ndarray, threshold: float):
     """

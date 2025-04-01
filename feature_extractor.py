@@ -11,7 +11,7 @@ import cv2
 
 
 
-def extract(video_id: str, video_directory: str, model_path: str, frame_count: int = np.inf, w: int = 3):
+def extract(video_id: str, video_directory: str, model_path: str, frame_count: int = np.inf, window_size: int = 3):
     """
     Extracts all features from specified video.
 
@@ -23,45 +23,53 @@ def extract(video_id: str, video_directory: str, model_path: str, frame_count: i
         Path to a YOLO model.
     frame_count : int
         Number of frames to analyze. If not specified, all frames are analyzed.
-    w : int
-        Moving average windows size. Must be odd.
+    window_size : int
+        Moving average window size. Must be odd.
 
     Returns
     -------
     df : pd.DataFrame
         DataFrame containing features.
     """
-    video_name = f"{video_id}_exploration_IB"
-    video_path = f"{video_directory}/{video_id}_exploration_IB.mp4"
+    # Raw data is saved in a json file
+    json_filepath = f"data/raw_data/{video_id}_exploration_IB.json"
+    data_full = load_json_to_dict(json_filepath)
+    # Check frame count
+    max_frame_count = len(data_full)
+    if frame_count > max_frame_count:
+        msg = f"Data file for video {video_id} contains only {max_frame_count} frames."
+        warnings.warn(msg)
+        frame_count = max_frame_count
+    # Extract bird and wall position from json file
+    bird_x, bird_y, wall_x, wall_y = extract_bird_and_wall_coordinates(json_filepath, frame_count)
+    # Apply sliding average and data imputation to bird and wall positions
+    bird_x = sliding_average(impute_data(bird_x), window_size)
+    bird_y = sliding_average(impute_data(bird_y), window_size)
+    wall_x = sliding_average(impute_data(wall_x), window_size)
+    wall_y = sliding_average(impute_data(wall_y), window_size)
 
+    # TODO: Modify code below so that data is extracted from the json file, not directly from video
+    video_path = f"{video_directory}/{video_id}_exploration_IB.mp4"
     # Get video
     vcap = load_video(video_path)
     # Get frame count and fps of video
     max_frame_count = int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = vcap.get(cv2.CAP_PROP_FPS)
-    # Check frame count
-    if frame_count > max_frame_count:
-        msg = f"Video {video_id} contains only {max_frame_count} frames."
-        warnings.warn(msg)
-        frame_count = max_frame_count
 
-    # TODO: The data can either be extract from video on the fly, or read from disk
-    df_perches, df_movement, df_sections = extract_from_video(vcap, video_id, video_directory, model_path, frame_count, fps)
-    #df_raw = pd.read_csv(f"../../data_yolo_nano_v2/{video_id}_exploration_IB.csv")[:frame_count]
-    # Apply data imputation and sliding average
-    df = preprocess_data(df_movement, w)
+    # Extract data related to perches and sections
+    df_perches, df_sections = extract_from_video(vcap, video_id, video_directory, model_path, frame_count, fps)
     # Compute total travelled distance
-    d = compute_distance(df["birdX"], df["birdY"])
+    d = compute_distance(bird_x, bird_y)
     # Compute speed of the bird
-    v = compute_speed(df["birdX"], df["birdY"], 1 / fps)
-    # Compute number of "hops" on home and exploration sides
-    # TODO: Adjust the threshold to a suitable value (determines
-    # how much the bird needs to move for the 'hop' to be counted)
-    threshold = 200
-    hops_home, hops_expl = count_threshold_crossings_sidewise(v, df["birdX"], np.mean(df["wallX"]), threshold)
+    v = compute_speed(bird_x, bird_y, 1 / fps)
 
-    df_out = df_perches.join(df_sections)
-    
+    # TODO: Count hops based on bird status instead of speed
+    # Compute number of "hops" on home and exploration sides
+    threshold = 200
+    hops_home, hops_expl = count_threshold_crossings_sidewise(v, bird_x, np.mean(wall_x), threshold)
+
+    # Join data frames
+    df_out = df_perches.join(df_sections)    
     # Add remaining feature to DataFrame
     df_out["d"] = d
     df_out["hops_home"] = hops_home
@@ -175,29 +183,6 @@ def extract_from_video(video_capture, video_id, video_directory, model_path, nfr
             if bird_x < wx_avg:
                 five_perches_timer += 1
 
-        
-        ###########################
-        # Infering movement count #
-        ###########################
-        bird = [dict for dict in frame.values() if dict["class"] == "bird"]
-        if len(bird) == 1:
-            bird_x_array[ind] = int((bird[0]["x1"] + bird[0]["x2"]) / 2)
-            bird_y_array[ind] = int((bird[0]["y1"] + bird[0]["y2"]) / 2)
-        else:
-            bird_x_array[ind] = np.nan
-            bird_y_array[ind] = np.nan
-
-        wall = [dict for dict in frame.values() if dict["class"] == "wall"]
-        if len(wall) == 1:
-            wall_x_array[ind] = int((wall[0]["x1"] + wall[0]["x2"]) / 2)
-            wall_y_array[ind] = int((wall[0]["y1"] + wall[0]["y2"]) / 2)
-        else:
-            wall_x_array[ind] = np.nan
-            wall_y_array[ind] = np.nan
-
-        sticsk = [dict for dict in frame.values() if dict["class"] == "stick"]
-        numsticks_array[ind] = len(sticsk)
-
         #####################
         # Infering sections #
         #####################
@@ -237,18 +222,6 @@ def extract_from_video(video_capture, video_id, video_directory, model_path, nfr
     }
     df_perches_out = pd.DataFrame(data = features_perches, index = [0])
 
-
-    ########################################
-    # Gathering results for movement count #
-    ########################################
-    features_movement = {"birdX": bird_x_array,
-                "birdY": bird_y_array,
-                "wallX": wall_x_array,
-                "wallY": wall_y_array,
-                "numsticks": numsticks_array}
-    
-    df_movement_out = pd.DataFrame(data = features_movement)
-
     ##############################
     # Gathering results sections #
     ##############################
@@ -256,35 +229,13 @@ def extract_from_video(video_capture, video_id, video_directory, model_path, nfr
     time_by_section = convert_frame_counts_to_time(total_frame_counts)
     df_sections = pd.DataFrame(time_by_section, index=[0])
 
-    return df_perches_out, df_movement_out, df_sections
+    return df_perches_out, df_sections
 
-def preprocess_data(df: pd.DataFrame, w: int):
-    """
-    Processes data in 'df' by imputing missing values and applying a moving average.
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame containing unprocessed data.
-    w : int
-        Moving average window size. Must be odd.
-    
-    Returns : pd.DataFrame
-        New DataFrame containing processed data.
-    """
-    # Select which columns to process
-    columns = ["birdX", "birdY", "wallX", "wallY"]
-    df_new = pd.DataFrame()
-    for col in columns:
-        data = df[col].to_numpy()
-        data = sliding_average(impute_data(data), w)
-        df_new[col] = data
-    return df_new
-
-video_id = "HE21362_100721_21JJ32"
+video_id = "CAGE_220520_HA70339"
 video_directory = "data/original_videos"
 model_path = "yolo/custom_yolo11n_v2.pt"
-frame_count = np.inf # How many frames to analyse if larger than video frame count then count all frames
+frame_count = 100 # How many frames to analyse if larger than video frame count then count all frames
 
 
 res = extract(video_id, video_directory, model_path, frame_count=frame_count)
