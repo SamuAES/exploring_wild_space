@@ -51,22 +51,23 @@ def read_video(video_capture:cv2.VideoCapture, model_path:str):
         
         for result in results:
             class_names = result.names # class names
-            boxes = []
+            boxes = {}
             
             # iterate over each box
             for i, box in enumerate(result.boxes):
                 x1, y1, x2, y2 = box.xyxy[0] # get coordinates
                 x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2) # convert from tensor to int
-                boxes.append({"class":class_names[int(box.cls)],
+                boxes[i] = {"class":class_names[int(box.cls)],
                             "confidence":float(box.conf),
                             "x1":x1,
                             "y1":y1,
                             "x2":x2,
-                            "y2":y2})
+                            "y2":y2}
                 
             yield boxes
-                
-    
+
+
+
 
 def read_video_and_save_frames_to_json(video_filepath:str, save_path:str, model_path:str, max_frames:int = np.inf):    
     video_capture = load_video(video_filepath)
@@ -89,7 +90,7 @@ def load_json_to_dict(json_filepath:str):
 
 def process_box(box:dict, row_index:int, num:int):
     df = pd.DataFrame(box, index=[row_index])
-    df.columns = [str(num) + col for col in df.columns]
+    df.columns = [col + "_" + str(num) for col in df.columns]
     return df
 
 def process_raw_data(data:dict):
@@ -114,7 +115,7 @@ def process_raw_data(data:dict):
         perch_num = 1
 
         # Join boxes of same class to their own frame_df
-        for box in frame:
+        for box in list(frame.values()):
             if box["class"] == "bird":
                 bird_frame_df = bird_frame_df.join(process_box(box, row_index, bird_num))
                 bird_num += 1
