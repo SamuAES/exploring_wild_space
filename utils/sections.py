@@ -1,5 +1,52 @@
 
-def assign_section_ys(result):
+def assign_section(frame, bird_x, bird_y, wall_x):
+    #Get the average y1 and y2 coordinates of the perches.
+    # y1 is top and y2 is bottom, y1 < y2
+    perch_y1 = 0
+    perch_y2 = 0
+    perch_count = 0
+    for box in frame.values():
+        if box['class'] == 'stick':
+            perch_y1 += box['y1']
+            perch_y2 += box['y2']
+            perch_count += 1
+    
+    if perch_count == 0:
+        # Raise an exception if no perches are found
+        raise ValueError("No perches found in the frame.")
+    perch_y1 /= perch_count
+    perch_y2 /= perch_count
+
+    # Calculate the middle lower and upper y-coordinates of the perch
+    # 0-30% perch length -> bottom
+    # 30-70% perch length -> middle
+    # 70-100% perch length -> top
+    middle_upper_y = perch_y1 + (perch_y2 - perch_y1) * 0.3
+    middle_lower_y = perch_y1 + (perch_y2 - perch_y1) * 0.7
+
+    result = {}
+
+    if bird_y is None:
+        pass
+    elif bird_y > middle_lower_y:
+        result['section_y'] = 'bottom'
+    elif middle_lower_y >= bird_y > middle_upper_y:
+        result['section_y'] = 'middle'
+    else:
+        result['section_y'] = 'top'
+
+    if wall_x is None:
+        pass
+    elif bird_x < wall_x:
+        result['section_x'] = 'left'
+    else:
+        result['section_x'] = 'right'
+
+
+    return result
+
+
+def assign_section_ys(frame):
     """
     Assign sections to birds based on y-coordinate averages.
     
@@ -14,7 +61,7 @@ def assign_section_ys(result):
         Updated dictionary with section_y information.
     """
     updated_result = {}
-    for key, value in result.items():
+    for key, value in frame.items():
         if value['class'] == 'bird':
             y_avg = (value['y1'] + value['y2']) / 2
             if y_avg < 240:

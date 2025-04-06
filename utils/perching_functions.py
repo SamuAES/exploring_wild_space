@@ -62,7 +62,7 @@ def extract_coordinates(frame):
                 on_cage = True # flip on_cage to True if bird is on the fence with probability higher than threshold
     
     # create arrays for sorting
-    dtype = [("id", int), ("probability", float)]
+    dtype = [("id", object), ("probability", float)]
     bird_array = np.array(bird_probs, dtype=dtype)
     stick_array = np.array(stick_probs, dtype=dtype)
     wall_array = np.array(wall_probs, dtype=dtype)

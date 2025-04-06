@@ -69,8 +69,13 @@ def read_video(video_capture:cv2.VideoCapture, model_path:str):
 
 
 
-def read_video_and_save_frames_to_json(video_filepath:str, save_path:str, model_path:str, max_frames:int = np.inf):    
+def read_video_and_save_frames_to_json(video_filepath:str, save_path:str, model_path:str, max_frames = None):        
+    
     video_capture = load_video(video_filepath)
+    if max_frames is None:
+        max_frames = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        max_frames = min(max_frames, int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT)))
+
     generator = read_video(video_capture, model_path)
     n = 1
     frames = {}
@@ -146,20 +151,6 @@ def process_raw_data(data:dict):
     return bird_df, wall_df, fence_df, perch_df
 
 
-
-
-
-if __name__=="__main__":
-    video_path = "../data/original_videos/HE21362_100721_21JJ32_exploration_IB.mp4"
-    save_path = "../data/raw_data/HE21362_100721_21JJ32_exploration_IB.json"
-    video_id = "HE21362_100721_21JJ32"
-    video_directory = "data/original_videos"
-    model_path = "../yolo/custom_yolo11n_v2.pt"
-    max_frames = 10 # How many frames to analyse if larger than video frame count then count all frames
-    read_video_and_save_frames_to_json(video_path, save_path, model_path, max_frames)
-    raw_dict = load_json_to_dict(save_path)
-    bird_df, wall_df, fence_df, perch_df = process_raw_data(raw_dict)
-    print(bird_df)
 
 
 

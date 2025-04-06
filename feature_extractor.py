@@ -11,7 +11,7 @@ import cv2
 
 
 
-def extract(video_id: str, video_directory: str, model_path: str, frame_count: int = np.inf, window_size: int = 3):
+def extract(video_id: str, video_directory: str, window_size: int = 3):
     """
     Extracts all features from specified video.
 
@@ -31,15 +31,21 @@ def extract(video_id: str, video_directory: str, model_path: str, frame_count: i
     df : pd.DataFrame
         DataFrame containing features.
     """
+    ##################################################################################################################
+    # TODO: Store frame count, fps, frame widht+height, and video name in the json file. Then we don't need to load the video here anymore.
+    video_path = f"{video_directory}/{video_id}_exploration_IB.mp4"
+    # Get video
+    vcap = load_video(video_path)
+    # Get frame count and fps of video
+    frame_count = int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = vcap.get(cv2.CAP_PROP_FPS)
+    ##################################################################################################################
+
+
+
     # Raw data is saved in a json file
     json_filepath = f"data/raw_data/{video_id}_exploration_IB.json"
     data_full = load_json_to_dict(json_filepath)
-    # Check frame count
-    max_frame_count = len(data_full)
-    if frame_count > max_frame_count:
-        msg = f"Data file for video {video_id} contains only {max_frame_count} frames."
-        warnings.warn(msg)
-        frame_count = max_frame_count
     # Extract bird and wall position from json file
     bird_x, bird_y, wall_x, wall_y = extract_bird_and_wall_coordinates(json_filepath, frame_count)
     # Apply sliding average and data imputation to bird and wall positions
@@ -48,16 +54,10 @@ def extract(video_id: str, video_directory: str, model_path: str, frame_count: i
     wall_x = sliding_average(impute_data(wall_x), window_size)
     wall_y = sliding_average(impute_data(wall_y), window_size)
 
-    # TODO: Modify code below so that data is extracted from the json file, not directly from video
-    video_path = f"{video_directory}/{video_id}_exploration_IB.mp4"
-    # Get video
-    vcap = load_video(video_path)
-    # Get frame count and fps of video
-    max_frame_count = int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = vcap.get(cv2.CAP_PROP_FPS)
-
+    
+    
     # Extract data related to perches and sections
-    df_perches, df_sections = extract_from_video(vcap, video_id, video_directory, model_path, frame_count, fps)
+    df_perches, df_sections = extract_from_data(data_full, video_id, frame_count, fps)
     # Compute total travelled distance
     d = compute_distance(bird_x, bird_y)
     # Compute speed of the bird
@@ -77,7 +77,7 @@ def extract(video_id: str, video_directory: str, model_path: str, frame_count: i
 
     return df_out
 
-def extract_from_video(video_capture, video_id, video_directory, model_path, nframes, fps):
+def extract_from_data(data:dict, video_id:str, nframes:int, fps:int):
     """
     Processes video in 'video_path' using model in 'model_path' and saves
     results (per frame coordinate information) to a .csv file or returns 
@@ -98,8 +98,7 @@ def extract_from_video(video_capture, video_id, video_directory, model_path, nfr
         DataFrame containing location coordinates for the bird and the wall.
     """
     video_name = f"{video_id}_exploration_IB"
-    generator = read_video(video_capture = video_capture,
-                           model_path = model_path)
+    
     
     ######################################
     # Initialization relateed to perches #
@@ -143,10 +142,7 @@ def extract_from_video(video_capture, video_id, video_directory, model_path, nfr
     # Loop over frames #
     ####################
     # TODO: Check how the bounding box coordinates are defined
-    for ind, frame in enumerate(tqdm(generator, desc="Frames analysed", total=nframes, mininterval=1)):
-
-        if ind == nframes:
-            break
+    for ind, frame in enumerate(tqdm(data.values(), desc="Frames analysed", total=nframes, mininterval=1)):
 
         ###################################
         # Infering information on perches #
@@ -186,14 +182,17 @@ def extract_from_video(video_capture, video_id, video_directory, model_path, nfr
         #####################
         # Infering sections #
         #####################
-         # Assign sections
-        labeled_result = assign_section_ys(frame)
-        labeled_result = assign_section_xs(labeled_result)
+        # Assign sections
+        sections = assign_section(frame, new_bird_x, new_bird_y, wx_avg)
+        for section in sections.values():
+            total_frame_counts[section] += 1
+        #labeled_result = assign_section_ys(frame, new_bird_x, new_bird_y, wx_avg)
+        #labeled_result = assign_section_xs(labeled_result)
         # Count frames by section
-        frame_counts = count_frames_by_section(labeled_result)
+        #frame_counts = count_frames_by_section(labeled_result)
         # Update total frame counts
-        for section, count in frame_counts.items():
-            total_frame_counts[section] += count
+        #for section, count in frame_counts.items():
+        #    total_frame_counts[section] += count
 
 
     #################################
@@ -232,11 +231,9 @@ def extract_from_video(video_capture, video_id, video_directory, model_path, nfr
     return df_perches_out, df_sections
 
 
-video_id = "CAGE_220520_HA70339"
-video_directory = "data/original_videos"
-model_path = "yolo/custom_yolo11n_v2.pt"
-frame_count = 100 # How many frames to analyse if larger than video frame count then count all frames
+if __name__ == "__main__":
+    video_id = "HE21355_090721_21NB21"
+    video_directory = "data/original_videos"
+    results = extract(video_id, video_directory)
+    print(results)
 
-
-res = extract(video_id, video_directory, model_path, frame_count=frame_count)
-res.to_csv(f"data/features/{video_id}_testi1.csv", header = True, index = False)
