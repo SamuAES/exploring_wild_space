@@ -46,6 +46,10 @@ def extract(video_id: str, video_directory: str, window_size: int = 3):
     # Raw data is saved in a json file
     json_filepath = f"data/raw_data/{video_id}_exploration_IB.json"
     data_full = load_json_to_dict(json_filepath)
+    
+    # Change this one depending if you are working with old or new .json files
+    # data_full = data_full["frames"]
+    
     # Extract bird and wall position from json file
     bird_x, bird_y, wall_x, wall_y = extract_bird_and_wall_coordinates(json_filepath, frame_count)
     # Apply sliding average and data imputation to bird and wall positions

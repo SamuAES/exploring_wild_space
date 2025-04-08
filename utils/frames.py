@@ -77,15 +77,31 @@ def read_video_and_save_frames_to_json(video_filepath:str, save_path:str, model_
         max_frames = min(max_frames, int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT)))
 
     generator = read_video(video_capture, model_path)
+    
     n = 1
-    frames = {}
+
+    filename = basename(video_filepath)
+    frame_count = video_capture.get(cv2.CAP_PROP_FRAME_COUNT)
+    frame_width = video_capture.get(cv2.CAP_PROP_FRAME_WIDTH)
+    frame_height = video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    fps =  video_capture.get(cv2.CAP_PROP_FPS)
+
+    result = {
+        "video_filename":filename,
+        "frame_count":frame_count,
+        "frame_width":frame_width,
+        "frame_height":frame_height,
+        "fps":fps,
+        "frames":{}
+        }
+
     for frame in tqdm(generator, desc="Frames", total=max_frames, mininterval=1):
-        frames[f"frame{n}"] = frame
+        result["frames"][f"frame{n}"] = frame
         if n == max_frames+1:
             break
         n += 1
     with open(save_path, "w") as json_file:
-        json.dump(frames, json_file, indent=4)
+        json.dump(result, json_file, indent=4)
 
 def load_json_to_dict(json_filepath:str):
     with open(json_filepath, "r") as json_file:
