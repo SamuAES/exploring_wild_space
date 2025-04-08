@@ -6,12 +6,11 @@ from utils.sections import *
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
-import warnings
 import cv2
 
 
 
-def extract(video_id: str, video_directory: str, window_size: int = 3):
+def extract(video_id: str, video_directory: str, window_size_mean: int = 3, window_size_mode: int = 31):
     """
     Extracts all features from specified video.
 
@@ -23,8 +22,10 @@ def extract(video_id: str, video_directory: str, window_size: int = 3):
         Path to a YOLO model.
     frame_count : int
         Number of frames to analyze. If not specified, all frames are analyzed.
-    window_size : int
-        Moving average window size. Must be odd.
+    window_size_mean : int
+        Sliding mean window size. Must be odd.
+    window_size_mode : int
+        Sliding mode window size. Must be odd.
 
     Returns
     -------
@@ -41,41 +42,42 @@ def extract(video_id: str, video_directory: str, window_size: int = 3):
     fps = vcap.get(cv2.CAP_PROP_FPS)
     ##################################################################################################################
 
-
-
     # Raw data is saved in a json file
     json_filepath = f"data/raw_data/{video_id}_exploration_IB.json"
     data_full = load_json_to_dict(json_filepath)
     # Extract bird and wall position from json file
     bird_x, bird_y, wall_x, wall_y = extract_bird_and_wall_coordinates(json_filepath, frame_count)
     # Apply sliding average and data imputation to bird and wall positions
-    bird_x = sliding_average(impute_data(bird_x), window_size)
-    bird_y = sliding_average(impute_data(bird_y), window_size)
-    wall_x = sliding_average(impute_data(wall_x), window_size)
-    wall_y = sliding_average(impute_data(wall_y), window_size)
-
-    
+    bird_x = sliding_mean(impute_data(bird_x), window_size_mean)
+    bird_y = sliding_mean(impute_data(bird_y), window_size_mean)
+    wall_x = sliding_mean(impute_data(wall_x), window_size_mean)
+    wall_y = sliding_mean(impute_data(wall_y), window_size_mean)
     
     # Extract data related to perches and sections
-    df_perches, df_sections = extract_from_data(data_full, video_id, frame_count, fps)
+    df_perches, df_sections, actions = extract_from_data(data_full, video_id, frame_count, fps)
+    
+    # Remove elements which correspond to unknown action
+    action_mask = actions != 0
+    actions = actions[action_mask]
+    # Array indicating the side of the cage that the bird is in
+    sides = determine_side(bird_x, wall_x)[action_mask]
+    # Take sliding mode of actions array
+    actions = sliding_mode(actions, window_size_mode)
+    # Count the number of hops in home and exploration sides
+    hops_home, hops_expl = count_hops(actions, sides)
+
     # Compute total travelled distance
     d = compute_distance(bird_x, bird_y)
-    # Compute speed of the bird
-    v = compute_speed(bird_x, bird_y, 1 / fps)
 
-    # TODO: Count hops based on bird status instead of speed
-    # Compute number of "hops" on home and exploration sides
-    threshold = 200
-    hops_home, hops_expl = count_threshold_crossings_sidewise(v, bird_x, np.mean(wall_x), threshold)
-
-    # Join data frames
-    df_out = df_perches.join(df_sections)    
-    # Add remaining feature to DataFrame
+    # Join DataFrames
+    df_out = df_perches.join(df_sections)
+    # Add remaining features to DataFrame
     df_out["d"] = d
     df_out["hops_home"] = hops_home
     df_out["hops_expl"] = hops_expl
 
     return df_out
+
 
 def extract_from_data(data:dict, video_id:str, nframes:int, fps:int):
     """
@@ -123,14 +125,6 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int):
     # For computing 5perches:
     five_perches_timer = 0 # for tracking time spent of left side    
 
-    ############################################
-    # Initialization related to movement count #
-    ############################################
-    bird_x_array = np.zeros(nframes)
-    bird_y_array = np.zeros(nframes)
-    wall_x_array = np.zeros(nframes)
-    wall_y_array = np.zeros(nframes)
-    numsticks_array = np.zeros(nframes)
 
     ######################################
     # Initialization related to sections #
@@ -183,7 +177,7 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int):
         # Infering sections #
         #####################
         # Assign sections
-        sections = assign_section(frame, new_bird_x, new_bird_y, wx_avg)
+        sections = assign_section(frame, bird_x, bird_y, wx_avg)
         for section in sections.values():
             total_frame_counts[section] += 1
         #labeled_result = assign_section_ys(frame, new_bird_x, new_bird_y, wx_avg)
@@ -228,11 +222,14 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int):
     time_by_section = convert_frame_counts_to_time(total_frame_counts)
     df_sections = pd.DataFrame(time_by_section, index=[0])
 
-    return df_perches_out, df_sections
+    return df_perches_out, df_sections, perching_result
 
 
 if __name__ == "__main__":
+    #video_id = "HE21362_100721_21JJ32"
     video_id = "HE21355_090721_21NB21"
+    #video_id = "CAGE_220520_HA70339"
+    #video_id = "HE21357_090721_Smedjeviken_BT"
     video_directory = "data/original_videos"
     results = extract(video_id, video_directory)
     print(results)

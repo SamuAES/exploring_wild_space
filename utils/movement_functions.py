@@ -1,3 +1,4 @@
+from scipy.stats import mode
 from .frames import *
 
 import numpy as np
@@ -70,7 +71,7 @@ def extract_bird_and_wall_coordinates(json_filepath, frame_count):
     return bird_x, bird_y, wall_x, wall_y
 
 
-def sliding_average(x: np.array, window_size: int = 15):
+def sliding_mean(x: np.array, window_size: int = 15):
     """
     Returns the sliding average for an array.
     
@@ -79,11 +80,11 @@ def sliding_average(x: np.array, window_size: int = 15):
     x : np.array
         Array with shape (n,) containing input data.
     window_size : int
-        Sliding average window size. Must be odd.
+        Sliding mean window size. Must be odd.
     
     Returns
     -------
-    res : np.array
+    means : np.array
         Array with shape (n,) containing the sliding averages.
     """
     assert window_size % 2 == 1, "Window size must be odd."
@@ -91,8 +92,97 @@ def sliding_average(x: np.array, window_size: int = 15):
     # Pad the array using reflection at the edges
     padded_x = np.pad(x, pad_width = half_window, mode = 'reflect')
     # Compute the moving average using a sliding window
-    res = np.convolve(padded_x, np.ones(window_size) / window_size, mode='valid')
-    return res
+    means = np.convolve(padded_x, np.ones(window_size) / window_size, mode = 'valid')
+    return means
+
+
+def sliding_mode(x: np.array, window_size: int = 31):
+    """
+    Returns the sliding mode for an array.
+    
+    Parameters
+    ----------
+    x : np.array
+        Array with shape (n,) containing input data.
+    window_size : int
+        Sliding mode window size. Must be odd.
+    
+    Returns
+    -------
+    modes : np.array
+        Array with shape (n,) containing the sliding modes.
+    """
+    assert window_size % 2 == 1, "Window size must be odd."
+    half_window = window_size // 2
+    # Pad the array at the edges
+    x_padded = np.pad(x, half_window, mode = 'edge')
+    modes = []
+    # Loop over array elements and pick modes
+    for i in range(x.shape[0]):
+        i_center = i + half_window
+        window = x_padded[i_center - half_window : i_center + half_window]
+        m = mode(window, keepdims = False).mode
+        modes.append(m)
+    return np.array(modes)
+
+
+def determine_side(bird_x: np.array, wall_x: np.array):
+    """
+    Returns a list indicating the side of the cage that the bird is in
+    (0 = homeside, 1 = exploration side).
+
+    Parameters
+    ----------
+    bird_x : np.array
+        Array containing the bird x-coordinates.
+    wall_x : np.array
+        Array containing the wall x-coordinates.
+
+    Returns
+    -------
+    side : np.array
+        Array which indicates the side.
+    """
+    assert bird_x.shape == wall_x.shape, "Input arrays must have the same shape."
+    n = bird_x.shape[0]
+    side = np.empty(n)
+    for i in range(n):
+        # Bird is in home side
+        if bird_x[i] >= wall_x[i]:
+            side[i] = 0
+        # Bird is in exploration side
+        else:
+            side[i] = 1
+    return side
+
+
+def count_hops(action: np.array, side: np.array):
+    """
+    Counts the number of hops in home and exploration sides.
+
+    Parameters
+    ----------
+    action : np.array
+        Array containing bird actions.
+    side : np.array
+        Array indicationg which side of the cage the bird is on.
+
+    Returns
+    -------
+    hops_home, hops_expl : tuple
+        Tuple of ints. The number of hops in home and exploration sides.
+    """
+    count_home = 0
+    count_expl = 0
+    prev = action[0]
+    for index, curr in enumerate(action[1:]):
+        if curr != prev:
+            if side[index - 1] == 0:
+                count_home += 1
+            else:
+                count_expl += 1
+            prev = curr
+    return count_home, count_expl
 
 
 def compute_distance(x: np.ndarray, y: np.ndarray):
@@ -139,67 +229,6 @@ def compute_speed(x: np.ndarray, y: np.ndarray, dt: float):
     dy = np.diff(y)
     d = np.sqrt(dx ** 2 + dy ** 2)
     return d / dt
-
-
-def count_threshold_crossings(x: np.ndarray, threshold: float):
-    """
-    Returns the number of times the values in 'x' go above 'threshold'.
-    
-    Parameters
-    ----------
-    x : np.ndarray
-        Array of values.
-    threshold : float
-        Threshold value.
-
-    Returns
-    -------
-    count : int
-        Number of crossings.
-    """
-    above_threshold = x > threshold 
-    crossings = np.diff(above_threshold.astype(int))
-    return np.count_nonzero(crossings == 1)
-
-
-def count_threshold_crossings_sidewise(v, x, wall_position, threshold):
-    """
-    Returns the number of times the values in 'x' go above 'threshold'
-    in both sides of the cage.
-    
-    Parameters
-    ----------
-    v : np.ndarray
-        Array of speed values.
-    x : np.ndarray
-        Array of position (x-coordinate) values.
-    wall_position : float
-        Position (x-coordinate) of the wall.
-    threshold : float
-        Threshold value.
-
-    Returns
-    -------
-    counts : tuple
-        Number of crossings on home side and exploration side.
-    """
-    n = v.shape[0]
-    above_threshold_home = np.empty(n)
-    above_threshold_expl = np.empty(n)
-    for ind, v_val in enumerate(v):
-        if v_val > threshold:
-            if x[ind] > wall_position:
-                above_threshold_home[ind] = 1
-                above_threshold_expl[ind] = 0
-            else:
-                above_threshold_home[ind] = 0
-                above_threshold_expl[ind] = 1
-        else:
-            above_threshold_home[ind] = 0
-            above_threshold_expl[ind] = 0
-    crossings_home = np.diff(above_threshold_home.astype(int))
-    crossings_expl = np.diff(above_threshold_expl.astype(int))
-    return np.count_nonzero(crossings_home == 1), np.count_nonzero(crossings_expl == 1)
 
 
 def impute_data(x):
