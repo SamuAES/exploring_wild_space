@@ -35,7 +35,7 @@ def assign_section(frame, bird_x, bird_y, wall_x):
     else:
         result['section_y'] = 'top'
 
-    if wall_x is None:
+    if wall_x is None or bird_x is None:
         pass
     elif bird_x < wall_x:
         result['section_x'] = 'left'
