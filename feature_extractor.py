@@ -7,6 +7,7 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import cv2
+from IPython.display import display
 
 
 
@@ -177,7 +178,15 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int):
         # Infering sections #
         #####################
         # Assign sections
-        sections = assign_section(frame, bird_x, bird_y, wx_avg)
+
+        # For debug:
+        # display({"bird_x": new_bird_x, "bird_y": new_bird_y, "wall_x_avg": wx_avg})
+        
+        if pd.isna(wx_avg):
+            # If wall_x_avg is NaN, skip this frame
+            continue
+
+        sections = assign_section(frame, new_bird_x, new_bird_y, wx_avg)
         for section in sections.values():
             total_frame_counts[section] += 1
         #labeled_result = assign_section_ys(frame, new_bird_x, new_bird_y, wx_avg)
