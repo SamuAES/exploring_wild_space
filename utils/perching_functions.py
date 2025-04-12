@@ -94,7 +94,7 @@ def extract_coordinates(frame):
     stick_ids = np.array([s[0] for s in sorted_sticks])
     stick_xs = np.array([(frame[stick_id]["x1"]+frame[stick_id]["x2"])/2 for stick_id in stick_ids])
     stick_ys = np.array([frame[stick_id]["y2"] for stick_id in stick_ids])
-
+    
     # remove perch coordinates that are too close to other perches (less than threshold)
     aa, bb = np.meshgrid(stick_xs, stick_xs)
     dist = np.abs(aa-bb)+np.eye(len(stick_xs))*10000 # distance matrix with diagonal changed to 10000 (so it doesn't interfere)
@@ -185,7 +185,67 @@ def compute_ground_and_fence(status, fps):
     fence = np.sum(status==-1)/fps
     ground = np.sum(status==-2)/fps
     return ground, fence
+
+
+def identify_and_number_exploration_perches(frame_data, wall_x, max_perches=5):
+    """
+    Identifies sticks on the exploration side (left of the wall), selects the most confident ones,
+    and numbers them from left to right.
+
+    Parameters
+    ----------
+    frame_data : dict
+        Dictionary containing detection data for a single frame.
+    wall_x : float or None
+        The x-coordinate of the center of the wall. If None, cannot determine exploration side.
+    max_perches : int, optional
+        The maximum number of perches expected on the exploration side, by default 5.
+
+    Returns
+    -------
+    list
+        A list of dictionaries, where each dictionary represents a numbered exploration perch
+        and contains 'number', 'x1', 'y1', 'x2', 'y2', 'center_x', 'center_y'.
+        Returns an empty list if wall_x is None or no valid perches are found.
+    """
+    if wall_x is None:
+        return []
+
+    stick_detections = []
+    for key, value in frame_data.items():
+        if value.get("class") == "stick":
+            center_x = (value['x1'] + value['x2']) / 2
+            # Check if the stick is on the exploration side (left of the wall)
+            if center_x < wall_x:
+                 # Add center coordinates for sorting
+                value['center_x'] = center_x
+                value['center_y'] = (value['y1'] + value['y2']) / 2
+                stick_detections.append(value)
+
+    if not stick_detections:
+        return []
     
+    # Sort by confidence (descending) to prune extras
+    stick_detections.sort(key=lambda x: x['confidence'], reverse=True)
+    confident_sticks = stick_detections[:max_perches]
+
+    # Sort the confident sticks by their center x-coordinate (ascending) for numbering
+    confident_sticks.sort(key=lambda x: x['center_x'])
+
+    # Assign numbers and prepare the final list
+    numbered_perches = []
+    for i, perch in enumerate(confident_sticks):
+        numbered_perches.append({
+            'number': i + 1,
+            'x1': perch['x1'],
+            'y1': perch['y1'],
+            'x2': perch['x2'],
+            'y2': perch['y2'],
+            'center_x': perch['center_x'],
+            'center_y': perch['center_y']
+        })
+
+    return numbered_perches
 
 if __name__=="__main__":
 

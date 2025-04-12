@@ -35,23 +35,24 @@ def extract(video_id: str, video_directory: str, window_size_mean: int = 3, wind
     """
     ##################################################################################################################
     # TODO: Store frame count, fps, frame widht+height, and video name in the json file. Then we don't need to load the video here anymore.
-    video_path = f"{video_directory}/{video_id}_exploration_IB.mp4"
-    # Get video
-    vcap = load_video(video_path)
-    # Get frame count and fps of video
-    frame_count = int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = vcap.get(cv2.CAP_PROP_FPS)
+    # video_path = f"{video_directory}/{video_id}_exploration_IB.mp4"
+    # # Get video
+    # vcap = load_video(video_path)
+    # # Get frame count and fps of video
+    # frame_count = int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # fps = vcap.get(cv2.CAP_PROP_FPS)
     ##################################################################################################################
 
     # Raw data is saved in a json file
     json_filepath = f"data/raw_data/{video_id}_exploration_IB.json"
     data_full = load_json_to_dict(json_filepath)
+    frame_count = int(data_full["frame_count"])
+    fps = int(data_full["fps"])
+    data_full = data_full["frames"]
     
-    # Change this one depending if you are working with old or new .json files
-    # data_full = data_full["frames"]
-    
+
     # Extract bird and wall position from json file
-    bird_x, bird_y, wall_x, wall_y = extract_bird_and_wall_coordinates(json_filepath, frame_count)
+    bird_x, bird_y, wall_x, wall_y = extract_bird_and_wall_coordinates(data_full, frame_count)
     # Apply sliding average and data imputation to bird and wall positions
     bird_x = sliding_mean(impute_data(bird_x), window_size_mean)
     bird_y = sliding_mean(impute_data(bird_y), window_size_mean)
@@ -140,7 +141,6 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int):
     ####################
     # Loop over frames #
     ####################
-    # TODO: Check how the bounding box coordinates are defined
     for ind, frame in enumerate(tqdm(data.values(), desc="Frames analysed", total=nframes, mininterval=1)):
 
         ###################################
@@ -148,6 +148,7 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int):
         ###################################
         # Get coordinates
         new_bird_x, new_bird_y, new_p_xs, new_p_ys, new_w_x, on_cage = extract_coordinates(frame)
+
         # If no perches are found (camera has fallen), continue loop without doing anything
         if len(new_p_xs) == 0:
             continue
@@ -163,6 +164,34 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int):
         cage_status[ind%10] = on_cage
         # Find if the bird is on a perch/fence, and which one
         bird_action = find_bird_on_perch(px_avgs, py_avgs, bird_x, bird_y, cage_status)
+        
+        # check if perch is 2 or 3 and apply special logic
+        if bird_action == 2 or bird_action == 3:
+            exploration_perches = identify_and_number_exploration_perches(frame, wx_avg)
+            p2 = exploration_perches[1] # perch2
+            p3 = exploration_perches[2] # perch3
+
+            # Notice that y = 0 in the top and increses as you go down the frame so y1 < y2.
+            # Check if bird_y is above the middle of stick3
+            if bird_y < p3['center_y']:
+                dist2 = abs(bird_x - p2['x1'])
+                dist3 = abs(bird_x - p3['x1'])
+                if dist2 < dist3:
+                    bird_action = 2
+                else:
+                    bird_action = 3
+            # Check if bird_y is below middle of stick3
+            elif bird_y >= p3['center_y']:
+                dist2 = abs(bird_x - p2['x2'])
+                dist3 = abs(bird_x - p3['x2'])
+                if dist2 < dist3:
+                    bird_action = 2
+                else:
+                    bird_action = 3
+
+
+
+
         # Update property arrays
         perching_result[ind] = bird_action
         all_bird_xs[ind] = bird_x
@@ -239,10 +268,11 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int):
 
 
 if __name__ == "__main__":
-    #video_id = "HE21362_100721_21JJ32"
-    video_id = "HE21355_090721_21NB21"
-    #video_id = "CAGE_220520_HA70339"
-    #video_id = "HE21357_090721_Smedjeviken_BT"
+    #video_id = "CAGE_020720_HA70343"
+    #video_id = "CAGE_030720_HA70344"
+    video_id = "CAGE_030720_HA70345"
+    #video_id = "CAGE_050721_HA70384"
+    
     video_directory = "data/original_videos"
     results = extract(video_id, video_directory)
     print(results)

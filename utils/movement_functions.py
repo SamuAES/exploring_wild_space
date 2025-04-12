@@ -4,7 +4,7 @@ from .frames import *
 import numpy as np
 
 
-def extract_bird_and_wall_coordinates(json_filepath, frame_count):
+def extract_bird_and_wall_coordinates(dict_full, frame_count):
     """
     Extracts coordinates of the bird and wall from a json file. If multiple
     bird or wall instances are detected in a single frame, selects the most
@@ -22,8 +22,7 @@ def extract_bird_and_wall_coordinates(json_filepath, frame_count):
     bird_x, bird_y, wall_x, wall_y : tuple
         Tuple of arrays containing bird and wall position data.
     """
-    # Load json file as dict
-    dict_full = load_json_to_dict(json_filepath)
+    
     # Initialize arrays
     bird_x = np.zeros(frame_count)
     bird_y = np.zeros(frame_count)
