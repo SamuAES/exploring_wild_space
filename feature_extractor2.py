@@ -36,7 +36,7 @@ def load_json_to_dict(filepath):
         return None
 
 
-def extract_features(video_id: str, data_dir: str = "data", window_size_mean: int = 3, window_size_mode: int = 31):
+def extract_features(video_id: str, data_dir: str = "data", window_size_mean: int = 7, window_size_mode: int = 31):
     """
     Extracts bird behaviour features from pre-processed JSON data.
 
@@ -46,11 +46,11 @@ def extract_features(video_id: str, data_dir: str = "data", window_size_mean: in
         The identifier for the video (e.g., "CAGE_020720_HA70343").
     data_dir : str, optional
         The base directory containing 'raw_data', by default "data".
+    window_size_mean : int, optional
+        Sliding mean window size for smoothing location data. Must be odd. By default 3.
     window_size_mode : int, optional
         Sliding mode window size for smoothing location data. Must be odd. By default 31.
 
-    Returns
-    -------
     Returns
     -------
     pd.DataFrame or None
@@ -84,6 +84,7 @@ def extract_features(video_id: str, data_dir: str = "data", window_size_mean: in
         return None
 
     # --- Loop through frames and collect data ---
+    print(f"Processing {frame_count} frames for video {video_id}...")
     # Initialize variables to store coordinates
     bird_coordinates = {"x1": [], "y1": [], "x2": [], "y2": []}
     wall_coordinates = {"x1": [], "y1": [], "x2": [], "y2": []}
@@ -92,7 +93,10 @@ def extract_features(video_id: str, data_dir: str = "data", window_size_mean: in
                         "perch2": {"x1": [], "y1": [], "x2": [], "y2": [], 'center_x': [], 'center_y': []},
                         "perch3": {"x1": [], "y1": [], "x2": [], "y2": [], 'center_x': [], 'center_y': []},
                         "perch4": {"x1": [], "y1": [], "x2": [], "y2": [], 'center_x': [], 'center_y': []},
-                        "perch5": {"x1": [], "y1": [], "x2": [], "y2": [], 'center_x': [], 'center_y': []}}
+                        "perch5": {"x1": [], "y1": [], "x2": [], "y2": [], 'center_x': [], 'center_y': []},
+                        "perch6": {"x1": [], "y1": [], "x2": [], "y2": [], 'center_x': [], 'center_y': []},
+                        "perch7": {"x1": [], "y1": [], "x2": [], "y2": [], 'center_x': [], 'center_y': []},
+                        "perch8": {"x1": [], "y1": [], "x2": [], "y2": [], 'center_x': [], 'center_y': []}}
     
     last_known_wall_x = None # Initialize to None, will be updated when wall detected
     for i in tqdm(range(frame_count), desc="Collecting coordinates"):
@@ -102,7 +106,8 @@ def extract_features(video_id: str, data_dir: str = "data", window_size_mean: in
         # Get Detections
         bird_detection = get_best_detection(frame_data, 'bird')
         wall_detection = get_best_detection(frame_data, 'wall')
-        fence_detections.append(True if get_best_detection(frame_data, 'fence') else False)
+        fence_detection = get_best_detection(frame_data, 'fence')
+        fence_detections.append(fence_detection if fence_detection else False)
 
         # Store Coordinates
         bird_coordinates["x1"].append(bird_detection['x1'] if bird_detection else np.nan)
@@ -154,16 +159,10 @@ def extract_features(video_id: str, data_dir: str = "data", window_size_mean: in
     locations = []
     sides = []
     vertical_sections = []
-    visited_perches_set = set()
-    five_perches_timer_frames = 0
-    first_entry_frame = -1 # Use -1 to indicate not yet entered
-    back_home_frame = -1   # Use -1 to indicate not yet returned
-    entered_exploration = False
     last_known_wall_x = None
 
-    print(f"Processing {frame_count} frames for video {video_id}...")
     # Use range(frame_count) to iterate based on metadata count
-    for i in tqdm(range(frame_count), desc="Analyzing frames"):
+    for i in tqdm(range(frame_count), desc="Processing data"):
     
         # --- Get Detections ---
         bird_bbox = {'x1': smoothed_bird_coordinates['x1'][i],
@@ -185,7 +184,7 @@ def extract_features(video_id: str, data_dir: str = "data", window_size_mean: in
         fence_detected = fence_detections[i]
 
         exploration_perches = []
-        for perch_num in range(1, 6):
+        for perch_num in range(1, 8 + 1):
             perch = {
                 'number': perch_num,
                 'x1': smoothed_perch_coordinates[f'perch{perch_num}']['x1'][i],
@@ -221,59 +220,85 @@ def extract_features(video_id: str, data_dir: str = "data", window_size_mean: in
         sides.append(current_side)
         vertical_sections.append(current_vertical)
 
-        # --- Update State Variables ---
-        if current_location.startswith('perch'):
+    # --- Apply Smoothing ---
+    print("Smoothing horizontal sections...")
+    smoothed_sides = sliding_mode(sides, window_size_mode)
+    print("Smoothing vertical sections...")
+    smoothed_vertical_sections = sliding_mode(vertical_sections, window_size_mode)
+    print("Smoothing locations...")
+    smoothed_locations = sliding_mode(locations, window_size_mode)
+
+
+    # --- Calculate Features ---
+    feature_results = {'T_new': 0, 'T_home': 0,
+                       'Top': 0, 'Middle': 0, 'Bottom': 0,
+                       'ground': 0, 'fence': 0,
+                       'perch1': 0, 'perch2': 0, 'perch3': 0, 'perch4': 0, 'perch5': 0}
+    visited_perches_set = set()
+    five_perches_timer_frames = 0
+    first_entry_frame = -1 # Use -1 to indicate not yet entered
+    back_home_frame = -1   # Use -1 to indicate not yet returned
+    entered_exploration = False
+    
+    total_frames = len(smoothed_locations)
+    for i in tqdm(range(total_frames), desc="Calculating results"):
+        # 5perches set
+        if smoothed_locations[i].startswith('perch'):
             try:
-                perch_num = int(current_location.replace('perch', ''))
+                perch_num = int(smoothed_locations[i].replace('perch', ''))
                 if 1 <= perch_num <= 5: # Only count exploration perches
                     visited_perches_set.add(perch_num)
             except ValueError:
                 pass # Should not happen if find_bird_location works correctly
 
-        if current_side == 'left':
+        # Increment 5 perches timer only if not all 5 visited yet
+        if len(visited_perches_set) < 5:
+            five_perches_timer_frames += 1
+
+        if smoothed_sides[i] == 'left':
             if first_entry_frame == -1:
                 first_entry_frame = i # Record first entry frame index
             entered_exploration = True # Mark that bird has been in exploration side
-            # Increment 5 perches timer only if not all 5 visited yet and bird is on left
-            if len(visited_perches_set) < 5:
-                five_perches_timer_frames += 1
-        elif current_side == 'right':
+        elif smoothed_sides[i] == 'right':
             # Check for back_home condition (first transition L->R after entering L)
-            if entered_exploration and back_home_frame == -1 and i > 0 and sides[i-1] == 'left':
+            if entered_exploration and back_home_frame == -1:
                  back_home_frame = i
 
-    # --- Apply Smoothing (Optional) ---
-    location_map = {'missing':0, 'perch1':1, 'perch2':2, 'perch3':3, 'perch4':4, 'perch5':5, 'other':6, 'ground':7, 'fence':8}
-    reverse_location_map = dict(map(reversed, location_map.items()))
-    numeric_locations = np.array([location_map[loc] for loc in locations])
-    smoothed_numeric_locations = sliding_mode(numeric_locations, window_size_mode)
-    smoothed_locations = [reverse_location_map[num] for num in smoothed_numeric_locations]
+        # Time-based features
+        # Time spent on each side
+        if smoothed_sides[i] == 'left':
+            feature_results['T_new'] += 1
+        elif smoothed_sides[i] == 'right':
+            feature_results['T_home'] += 1
+        # Time spent in each vertical section
+        if smoothed_vertical_sections[i] == 'top':
+            feature_results['Top'] += 1
+        elif smoothed_vertical_sections[i] == 'middle':
+            feature_results['Middle'] += 1
+        elif smoothed_vertical_sections[i] == 'bottom':
+            feature_results['Bottom'] += 1
+        # Time spent on each location
+        # Ground and fence
+        if smoothed_locations[i] == 'ground':
+            feature_results['ground'] += 1
+        elif smoothed_locations[i] == 'fence':
+            feature_results['fence'] += 1
+        # Perches 1 to 5
+        if smoothed_locations[i].startswith('perch'):
+            perch_num = int(smoothed_locations[i].replace('perch', ''))
+            if 1 <= perch_num <= 5: # Only count exploration perches
+                feature_results[f'perch{perch_num}'] += 1
 
-    # --- Calculate Features ---
-    print("Calculating final features...")
-    feature_results = {}
 
-    # Latency
+    # Convert time counts to seconds
+    for key in feature_results:
+        feature_results[key] = feature_results[key] / fps    
+
+     # Latency
     feature_results['latency'] = first_entry_frame / fps if first_entry_frame != -1 else np.nan
 
     # Back Home (Event: 1 if occurred, 0 if not)
-    feature_results['back_home'] = 1 if back_home_frame != -1 else 0
-
-    # Time-based features
-    total_frames = len(smoothed_locations)
-    feature_results['T_new'] = sum(1 for s in sides if s == 'left') / fps
-    feature_results['T_home'] = sum(1 for s in sides if s == 'right') / fps
-    feature_results['Top'] = sum(1 for vs in vertical_sections if vs == 'top') / fps
-    feature_results['Middle'] = sum(1 for vs in vertical_sections if vs == 'middle') / fps
-    feature_results['Bottom'] = sum(1 for vs in vertical_sections if vs == 'bottom') / fps
-    feature_results['ground'] = sum(1 for loc in smoothed_locations if loc == 'ground') / fps
-    feature_results['fence'] = sum(1 for loc in smoothed_locations if loc == 'fence') / fps
-
-    for i in range(1, 6): # Perches 1 to 5
-        feature_results[f'perch{i}'] = sum(1 for loc in smoothed_locations if loc == f'perch{i}') / fps
-
-    # 5 Perches Time
-    feature_results['5perches'] = five_perches_timer_frames / fps
+    feature_results['back_home'] = back_home_frame / fps if back_home_frame != -1 else np.nan
 
     # Movement Counts (Hops)
     movements_expl = 0
@@ -284,7 +309,7 @@ def extract_features(video_id: str, data_dir: str = "data", window_size_mean: in
         prev_side = sides[0] # Use original side for attributing hops
         for i in range(1, total_frames):
             curr_loc = smoothed_locations[i]
-            curr_side = sides[i]
+            curr_side = smoothed_sides[i]
             # Count hop if location changed (and not missing/unknown?)
             if curr_loc != prev_loc and prev_loc not in ['missing', 'other'] and curr_loc not in ['missing', 'other']:
                  # Attribute hop to the side where it started (previous frame's side)
@@ -293,7 +318,7 @@ def extract_features(video_id: str, data_dir: str = "data", window_size_mean: in
                  elif prev_side == 'right':
                      movements_home += 1
             prev_loc = curr_loc
-            prev_side = curr_side # Update previous side as well
+            prev_side = curr_side
 
     feature_results['movements'] = movements_expl # Exploration side movements
     feature_results['move_home'] = movements_home # Home side movements

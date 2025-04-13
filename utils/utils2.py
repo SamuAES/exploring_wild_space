@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.stats import mode
+import pandas as pd
+from tqdm import tqdm
 
 def get_best_detection(frame_data, class_name):
     """
@@ -35,7 +37,7 @@ def get_best_detection(frame_data, class_name):
     return detections[0]
 
 
-def identify_and_number_exploration_perches(frame_data, wall_x, max_perches=5):
+def identify_and_number_exploration_perches(frame_data, wall_x):
     """
     Identifies sticks on the exploration side (left of the wall), selects the most confident ones,
     and numbers them from left to right.
@@ -56,33 +58,46 @@ def identify_and_number_exploration_perches(frame_data, wall_x, max_perches=5):
         and contains 'number', 'x1', 'y1', 'x2', 'y2', 'center_x', 'center_y'.
         Returns an empty list if wall_x is None or no valid perches are found.
     """
+    
     if wall_x is None:
         return []
 
-    stick_detections = []
+    stick_detections_left = []
+    stick_detections_right = []
+
     for key, value in frame_data.items():
         if value.get("class") == "stick":
             center_x = (value['x1'] + value['x2']) / 2
             # Check if the stick is on the exploration side (left of the wall)
+            value['center_x'] = center_x
+            value['center_y'] = (value['y1'] + value['y2']) / 2
             if center_x < wall_x:
-                 # Add center coordinates for sorting
-                value['center_x'] = center_x
-                value['center_y'] = (value['y1'] + value['y2']) / 2
-                stick_detections.append(value)
+                stick_detections_left.append(value)
+            else:
+                stick_detections_right.append(value)
 
-    if not stick_detections:
+    if not stick_detections_left:
         return []
 
+    # Number of perches on left side
+    left_perches=5
+    # Number of perches on right side
+    right_perches=3
+
     # Sort by confidence (descending) to prune extras
-    stick_detections.sort(key=lambda x: x['confidence'], reverse=True)
-    confident_sticks = stick_detections[:max_perches]
+    stick_detections_left.sort(key=lambda x: x['confidence'], reverse=True)
+    confident_sticks_left = stick_detections_left[:left_perches]
+
+    stick_detections_right.sort(key=lambda x: x['confidence'], reverse=True)
+    confident_sticks_right = stick_detections_right[:right_perches]
 
     # Sort the confident sticks by their center x-coordinate (ascending) for numbering
-    confident_sticks.sort(key=lambda x: x['center_x'])
+    confident_sticks_left.sort(key=lambda x: x['center_x'])
+    confident_sticks_right.sort(key=lambda x: x['center_x'])
 
     # Assign numbers and prepare the final list
     numbered_perches = []
-    for i, perch in enumerate(confident_sticks):
+    for i, perch in enumerate(confident_sticks_left + confident_sticks_right):
         numbered_perches.append({
             'number': i + 1,
             'x1': perch['x1'],
@@ -119,8 +134,9 @@ def find_bird_location(bird_bbox, exploration_perches, fence_detected, horizonta
     if bird_bbox is None:
         return 'missing'
 
-    if fence_detected:
-        return 'fence'
+    if fence_detected: 
+        if fence_detected['confidence'] > 0.8: # Assuming a confidence threshold for fence detection
+            return 'fence'
 
     bird_center_x = (bird_bbox['x1'] + bird_bbox['x2']) / 2
     bird_center_y = (bird_bbox['y1'] + bird_bbox['y2']) / 2
@@ -145,11 +161,11 @@ def find_bird_location(bird_bbox, exploration_perches, fence_detected, horizonta
         if p['y1'] <= bird_center_y <= p['y2']:
             # Calculate horizontal distance based on perch number
             if p['number'] in [2, 3]:  # Special logic for perches 2 and 3
-                if bird_center_y <= p['center_y']: # If bird center y is above perch center y (Notice the y-coordinate is inverted -> top frame has y=0)
+                if bird_bbox['y2'] <= p['center_y']: # If bird center y is above perch center y (Notice the y-coordinate is inverted -> top frame has y=0)
                     dist = abs(bird_center_x - p['x1']) # Compare bird center to perch left edge
                 else:
                     dist = abs(bird_center_x - p['x2']) # Compare bird center to perch right edge
-            else:  # Standard logic for perches 1, 4, 5
+            else:  # Standard logic for perches 1, 4, 5, 6, 7, 8
                 dist = abs(bird_center_x - p['center_x']) # Compare bird center to perch center
 
             # Check if this is the closest perch within the threshold
@@ -200,17 +216,17 @@ def calculate_sections(bird_bbox, wall_x, exploration_perches):
 
     # Determine vertical section (relative to exploration perches if available)
     if exploration_perches:
-        min_y1 = min(p['y1'] for p in exploration_perches)
-        max_y2 = max(p['y2'] for p in exploration_perches)
-        perch_height = max_y2 - min_y1
+        y1_average = np.mean([p['y1'] for p in exploration_perches])
+        y2_average = np.mean([p['y2'] for p in exploration_perches])
+        perch_height = np.abs(y2_average - y1_average)
 
         if perch_height > 0: # Avoid division by zero if perches have no height span
-            # 0-30% perch length -> bottom
-            # 30-70% perch length -> middle
-            # 70-100% perch length -> top
+            # 0-35% perch length -> bottom
+            # 35-65% perch length -> middle
+            # 65-100% perch length -> top
             # Note: y-coordinates increase downwards
-            top_boundary = min_y1 + perch_height * 0.3
-            bottom_boundary = min_y1 + perch_height * 0.7
+            top_boundary = y1_average + perch_height * 0.32
+            bottom_boundary = y1_average + perch_height * 0.66
 
             if bird_center_y < top_boundary:
                 sections['vertical'] = 'top'
@@ -230,47 +246,26 @@ def calculate_sections(bird_bbox, wall_x, exploration_perches):
 
 def sliding_mean(x: np.array, window_size: int = 15):
     """
-    Returns the sliding average for an array. Handles NaNs by ignoring them in the mean calculation
-    for the window, but keeps NaNs in the output if the window is all NaNs.
-
+    Returns the sliding average for an array.
+    
     Parameters
     ----------
     x : np.array
         Array with shape (n,) containing input data.
     window_size : int
         Sliding mean window size. Must be odd.
-
+    
     Returns
     -------
     means : np.array
         Array with shape (n,) containing the sliding averages.
     """
-    if not isinstance(x, np.ndarray):
-        x = np.array(x, dtype=float) # Ensure it's a numpy array of floats
-
     assert window_size % 2 == 1, "Window size must be odd."
     half_window = window_size // 2
-
-    # Use pandas rolling mean which handles NaNs gracefully
-    import pandas as pd
-    series = pd.Series(x)
-    means = series.rolling(window=window_size, center=True, min_periods=1).mean().to_numpy()
-
-    # Pad the edges using reflection (pandas doesn't do this directly for rolling)
-    # We'll calculate the edges separately using reflected padding
-    padded_x = np.pad(x, pad_width=half_window, mode='reflect')
-    edge_means = np.convolve(np.where(np.isnan(padded_x), 0, padded_x), np.ones(window_size), mode='valid')
-    counts = np.convolve(~np.isnan(padded_x), np.ones(window_size), mode='valid')
-    
-    # Avoid division by zero
-    valid_counts_mask = counts > 0
-    edge_means[valid_counts_mask] /= counts[valid_counts_mask]
-    edge_means[~valid_counts_mask] = np.nan # Set to NaN where count is zero
-
-    # Fill the edges of the pandas result
-    means[:half_window] = edge_means[:half_window]
-    means[-half_window:] = edge_means[-half_window:]
-
+    # Pad the array using reflection at the edges
+    padded_x = np.pad(x, pad_width = half_window, mode = 'reflect')
+    # Compute the moving average using a sliding window
+    means = np.convolve(padded_x, np.ones(window_size) / window_size, mode = 'valid')
     return means
 
 
@@ -296,29 +291,27 @@ def sliding_mode(x: np.array, window_size: int = 31):
     assert window_size % 2 == 1, "Window size must be odd."
     half_window = window_size // 2
     n = len(x)
-    modes = np.full(n, np.nan) # Initialize with NaNs
+    modes = [] # Initialize with NaNs
 
-    # Pad the array at the edges
-    # Using 'edge' padding might be okay for mode, or reflect? Let's stick to edge for simplicity.
-    x_padded = np.pad(x, half_window, mode='edge')
+    for i in tqdm(range(n), desc="Smoothing with sliding mode", mininterval=1):
+        # Handle edge cases where the window extends beyond the array bounds
+        if i < window_size or i >= n - window_size:
+            window = x[max(0, i - half_window) : min(n, i + half_window + 1)]
+        
+        else:
+            i_center = i + half_window
+            window = x[i_center - half_window : i_center + half_window + 1] # Correct window slicing
 
-    for i in range(n):
-        i_center = i + half_window
-        window = x_padded[i_center - half_window : i_center + half_window + 1] # Correct window slicing
-        valid_window = window[~np.isnan(window)] # Filter out NaNs
-
-        if valid_window.size > 0:
-            # Calculate mode using scipy.stats.mode
-            mode_result = mode(valid_window, keepdims=False)
-            # Handle cases where mode returns multiple values (take the first)
-            if np.isscalar(mode_result.mode):
-                 modes[i] = mode_result.mode
-            elif len(mode_result.mode) > 0:
-                 modes[i] = mode_result.mode[0]
-            # else: modes[i] remains NaN if mode is empty (shouldn't happen if valid_window.size > 0)
-        # else: modes[i] remains NaN if window has no valid data
-
-    return modes
+        # Calculate mode using pandas df.mode()
+        mode_result = pd.DataFrame({'values':window}).mode(numeric_only=False)
+        mode_result = mode_result['values'].to_numpy() # Convert to numpy array
+        # Handle cases where mode returns multiple values (take the first)
+        if len(mode_result) > 0:
+            modes.append(mode_result[0])
+        else:
+            modes.append(np.nan)
+        
+    return np.array(modes)
 
 
 def impute_data(x):
