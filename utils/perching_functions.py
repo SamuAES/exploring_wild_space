@@ -9,8 +9,6 @@ def initialize_coordinates(video_name):
     p_xs[:,:] = np.nan # initialize as NaNs
     p_ys = np.empty((10,8)) # arrays of 10 previous y-coordinates for each perch 
     p_ys[:,:] = np.nan # initialize as NaNs
-    w_xs = np.empty(10) # array of 10 previous x-coordinates for the center wall
-    w_xs[:] = np.nan # initialize as NaNs
 
     # fill in first x-coordinates from manual annotations
     master_file = "data/masterfile_20202021_LOOPY(Coordinates_xPerches).csv"
@@ -30,7 +28,7 @@ def initialize_coordinates(video_name):
         if not np.isnan(p_xs[0,i]):
             five_perches_set.add(i+1)
     
-    return p_xs, p_ys, w_xs, five_perches_set
+    return p_xs, p_ys, five_perches_set
 
 
 def extract_coordinates(frame):
@@ -50,11 +48,7 @@ def extract_coordinates(frame):
     wall_probs = []
     on_cage = False
     for key in frame: # loop through items
-        if frame[key]["class"] == "bird":
-            bird_probs.append((key, frame[key]["confidence"])) # append probability to list
-        elif frame[key]["class"] == "wall":
-            wall_probs.append((key, frame[key]["confidence"])) # append probability to list
-        elif frame[key]["class"] == "stick":
+        if frame[key]["class"] == "stick":
             if frame[key]["confidence"]>0.5:
                 stick_probs.append((key, frame[key]["confidence"])) # append probability to list if confidence threshold of 50% is met
         elif frame[key]["class"] == "fence":
@@ -63,32 +57,14 @@ def extract_coordinates(frame):
     
     # create arrays for sorting
     dtype = [("id", object), ("probability", float)]
-    bird_array = np.array(bird_probs, dtype=dtype)
     stick_array = np.array(stick_probs, dtype=dtype)
-    wall_array = np.array(wall_probs, dtype=dtype)
 
     # sort arrays to get most confident bird and wall and 8 most confident sticks later
-    sorted_birds = np.sort(bird_array, order="probability")
     sorted_sticks = np.sort(stick_array, order="probability")
-    sorted_walls = np.sort(wall_array, order="probability")
-
-    if len(sorted_birds)==0: # if bird not found, return None
-        bird_x = None
-        bird_y = None
-    else: # otherwise, get middle of x and y coordinates for highest-confidence bird
-        bird_id = sorted_birds[-1][0]
-        bird_x = (frame[bird_id]["x1"]+frame[bird_id]["x2"])/2
-        bird_y = (frame[bird_id]["y1"]+frame[bird_id]["y2"])/2
-    
-    if len(sorted_walls)==0: # if wall not found, return None
-        wall_x = None
-    else: # otherwise, get middle of x and y coordinates for highest-confidence wall
-        wall_id = sorted_walls[-1][0]
-        wall_x = (frame[wall_id]["x1"]+frame[wall_id]["x2"])/2
 
     # if perches not found, return empty lists
     if len(sorted_sticks)==0:
-        return bird_x, bird_y, [], [], wall_x, on_cage
+        return [], [], on_cage
 
     # calculate perch coordinates
     stick_ids = np.array([s[0] for s in sorted_sticks])
@@ -106,7 +82,7 @@ def extract_coordinates(frame):
     stick_xs = stick_xs[xs_ind]
     stick_ys = stick_ys[xs_ind]
 
-    return bird_x, bird_y, stick_xs[:8], stick_ys[:8], wall_x, on_cage # perch coordinates are sorted by confidence: return only first 8
+    return stick_xs[:8], stick_ys[:8], on_cage # perch coordinates are sorted by confidence: return only first 8
 
 
 def update_perch_coordinates(p_xs, p_ys, new_p_xs, new_p_ys, n):
@@ -128,12 +104,6 @@ def update_perch_coordinates(p_xs, p_ys, new_p_xs, new_p_ys, n):
     # if more new perches than moving averages: TODO
     
     return p_xs, p_ys, px_moving_avgs, py_moving_avgs
-
-def update_wall_coordinates(w_xs, new_w_x, n):
-    wx_moving_avg = np.nanmean(w_xs)
-    w_xs[n] = new_w_x
-
-    return w_xs, wx_moving_avg
 
 def find_bird_on_perch(px_moving_avgs, py_moving_avgs, bird_x, bird_y, cage_status):
 
