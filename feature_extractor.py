@@ -2,6 +2,7 @@ from utils.frames import *
 from utils.perching_functions import *
 from utils.movement_functions import *
 from utils.sections import *
+from utils.quality_functions import *
 
 from tqdm import tqdm
 import pandas as pd
@@ -60,7 +61,7 @@ def extract(video_id: str, video_directory: str, window_size_mean: int = 3, wind
     wall_y = sliding_mean(impute_data(wall_y), window_size_mean)
     
     # Extract data related to perches and sections
-    df_perches, df_sections, actions = extract_from_data(data_full, video_id, frame_count, fps, bird_x, bird_y, wall_x)
+    df_perches, df_sections, actions, quality_metrics = extract_from_data(data_full, video_id, frame_count, fps, bird_x, bird_y, wall_x)
     
     # Remove elements which correspond to unknown action <- what, why?
     action_mask = actions != 0
@@ -82,15 +83,15 @@ def extract(video_id: str, video_directory: str, window_size_mean: int = 3, wind
     df_out["hops_home"] = hops_home
     df_out["hops_expl"] = hops_expl
 
-    print(len(bird_x))
-    print(bird_x)
-    print(bird_x[0])
+    #print(len(bird_x))
+    #print(bird_x)
+    #print(bird_x[0])
 
-    print(sides)
-    print(len(sides))
-    print(sides[0])
+    #print(sides)
+    #print(len(sides))
+    #print(sides[0])
 
-    return df_out
+    return df_out, quality_metrics
 
 
 def extract_from_data(data:dict, video_id:str, nframes:int, fps:int, bird_x:np.array, bird_y:np.array, wall_x:np.array):
@@ -132,6 +133,15 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int, bird_x:np.a
     # For computing 5perches:
     five_perches_timer = 0 # for tracking time spent of left side    
 
+    ####################
+    # Quality measures #
+    ####################
+    camera_movement = False
+    perch_coordinates_movement = np.nan
+    number_of_manually_annotated_perches = np.count_nonzero(~np.isnan(p_xs[0, :5]))
+    close_perches = perches_within_threshold(p_xs[0, :5])
+    inbetween_zones = 0
+    inbetween_perches_2_3 = 0
 
     ######################################
     # Initialization related to sections #
@@ -155,9 +165,11 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int, bird_x:np.a
 
         # If no perches are found (camera has fallen), continue loop without doing anything
         if len(new_p_xs) == 0:
+            camera_movement = True
             continue
         # Update coordinates of each perch into moving arrays
         p_xs, p_ys, px_avgs, py_avgs = update_perch_coordinates(p_xs, p_ys, new_p_xs, new_p_ys, ind%10)
+
         # Update cage status
         cage_status[ind%10] = on_cage
         # Find if the bird is on a perch/fence, and which one
@@ -187,8 +199,18 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int, bird_x:np.a
                 else:
                     bird_action = 3
 
-
-
+        # Detect camera movement
+        if ind+1 % 100 == 0 and not camera_movement:
+            if np.isnan(perch_coordinates_movement):
+                perch_coordinates_movement = px_avgs.copy()
+            camera_movement = detect_movement(perch_coordinates_movement, px_avgs, new_p_xs)
+            perch_coordinates_movement = px_avgs.copy()
+        # Detect if bird is on the threshold between two different sections
+        if bird_inbetween_sections(frame, new_bird_y):
+            inbetween_zones += 1
+        # Detect if the bird is between perches 2 and 3
+        if bird_between_perch_2_3(px_avgs, py_avgs, new_bird_x, new_bird_y, cage_status):
+            inbetween_perches_2_3 += 1
 
         # Update property arrays
         perching_result[ind] = bird_action
@@ -257,18 +279,38 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int, bird_x:np.a
     ##############################
     # Convert frame counts to time
     time_by_section = convert_frame_counts_to_time(total_frame_counts)
+
+    ###################
+    # Quality results #
+    ###################
+
+    quality_values = {
+        "camera_movement": camera_movement,
+        "perch_count": number_of_manually_annotated_perches,
+        "close_perches": close_perches,
+        "bird_inbetween_zones": inbetween_zones/30,
+        "bird_inbetween_perches": inbetween_perches_2_3/30
+    }
+    quality_metrics = pd.DataFrame(data=quality_values, index=[0])
+
     df_sections = pd.DataFrame(time_by_section, index=[0])
 
-    return df_perches_out, df_sections, perching_result
+    return df_perches_out, df_sections, perching_result, quality_metrics
 
 
 if __name__ == "__main__":
     #video_id = "CAGE_020720_HA70343"
     #video_id = "CAGE_030720_HA70344"
     video_id = "CAGE_030720_HA70345"
-    #video_id = "CAGE_050721_HA70384"
+
+    #video_id = "CAGE_050721_HA70384" # Large camera movement
+    #video_id = "CAGE_220520_HA70337" # Small camera movement
+    #video_id = "HE21359_100721_21OW7" # Very slight camera movement over time
+    #video_id = "HE21365_110721_21NB23" # Small camera movement
+    #video_id = "CAGE_100720_HA70355"
+    #vidoe_id = "CAGE_200520_HA70335"
     
     video_directory = "data/original_videos"
-    results = extract(video_id, video_directory)
-    print(results)
+    results, quality_metrics = extract(video_id, video_directory)
+    print(quality_metrics)
 

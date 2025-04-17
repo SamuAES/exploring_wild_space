@@ -16,7 +16,7 @@ def initialize_coordinates(video_name):
     df = df[df["VIDEO TITLE"]==video_name]
     coords = np.array([df[f"X PERCH{i+1}"] for i in range(8)]).T[0] # get coordinates
     # check if annotation goes from left to right or right to left; flip them if right to left
-    if coords[0]>coords[1] and coords[1]>coords[2] and coords[0]>coords[3] and coords[2]>coords[4]: # several conditions in case there are nans (kind of a hack)
+    if coords[0]>coords[1] or coords[1]>coords[2] or coords[0]>coords[3] or coords[2]>coords[4]: # several conditions in case there are nans (kind of a hack)
         p_xs[0,:] = np.flip(coords)
     else:
         p_xs[0,:] = coords
