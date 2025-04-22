@@ -32,19 +32,19 @@ def perches_within_threshold(perch_coodinates, threshold=50):
         return True
     return False
 
-def too_many_perches_on_exploration_side(perch_coordinates, wall_coordiate, n=5):
+def too_many_perches_on_exploration_side(perch_coordinates, wall_coordiate, n=5): # Unused
     if np.isnan(wall_coordiate):
         return False
     return n < len(perch_coordinates[perch_coordinates < wall_coordiate])
 
-def perch_assignment_failure(assigned_perches, perch_coordinates):
+def perch_assignment_failure(assigned_perches, perch_coordinates): # Unused
     for perch in perch_coordinates:
         if perch not in assigned_perches:
             return True
     
     return False
 
-def perch_deviates_from_average(average_perch_coordinates, new_perch_coordinates, threshold=30):
+def perch_deviates_from_average(average_perch_coordinates, new_perch_coordinates, threshold=30): #Unused
     dist = np.abs(average_perch_coordinates - new_perch_coordinates)
 
     return len(dist[dist > 30]) > 0
@@ -99,6 +99,6 @@ def bird_between_perch_2_3(px_moving_avgs, py_moving_avgs, bird_x, bird_y, cage_
     
     
     if px_moving_avgs[1] < bird_x < px_moving_avgs[2]:
-        if py_moving_avgs[1] < bird_y< py_moving_avgs[2]:
+        if py_moving_avgs[1] >  bird_y and bird_y < py_moving_avgs[2]:
             return True
     return False
