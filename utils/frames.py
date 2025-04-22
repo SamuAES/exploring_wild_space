@@ -120,9 +120,9 @@ def process_raw_data(data:dict):
     wall_df = pd.DataFrame()
     fence_df = pd.DataFrame()
     perch_df = pd.DataFrame()
+    frame_count = len(data)
 
-
-    for row_index, frame in enumerate(data.values(), start=1):
+    for row_index, frame in tqdm(enumerate(data.values(), start=1), desc="Processing frames", total=frame_count, mininterval=1):
         # Initialize empty dataframes for frame
         bird_frame_df = pd.DataFrame(index=[row_index])
         wall_frame_df = pd.DataFrame(index=[row_index])

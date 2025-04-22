@@ -1,1 +1,0 @@
-# Store all hardcoded values here, including paths.

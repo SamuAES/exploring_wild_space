@@ -1,7 +1,6 @@
 import numpy as np
 
 
-
 def detect_movement(previous_coordinates, current_coordinates, new_coordinates):
     '''
     Some bugs still

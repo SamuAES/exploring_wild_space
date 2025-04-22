@@ -1,5 +1,5 @@
 from utils.frames import *
-from utils.perching_functions import *
+from utils.old.perching_functions import *
 from utils.movement_functions import *
 from utils.sections import *
 from utils.quality_functions import *
@@ -34,15 +34,6 @@ def extract(video_id: str, video_directory: str, window_size_mean: int = 3, wind
     df : pd.DataFrame
         DataFrame containing features.
     """
-    ##################################################################################################################
-    # TODO: Store frame count, fps, frame widht+height, and video name in the json file. Then we don't need to load the video here anymore.
-    # video_path = f"{video_directory}/{video_id}_exploration_IB.mp4"
-    # # Get video
-    # vcap = load_video(video_path)
-    # # Get frame count and fps of video
-    # frame_count = int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))
-    # fps = vcap.get(cv2.CAP_PROP_FPS)
-    ##################################################################################################################
 
     # Raw data is saved in a json file
     json_filepath = f"data/raw_data/{video_id}_exploration_IB.json"
@@ -232,20 +223,14 @@ def extract_from_data(data:dict, video_id:str, nframes:int, fps:int, bird_x:np.a
         # For debug:
         # display({"bird_x": new_bird_x, "bird_y": new_bird_y, "wall_x_avg": wx_avg})
         
-        if pd.isna(new_wall_x):
+        #if pd.isna(new_wall_x):
             # If wall_x_avg is NaN, skip this frame <- should not happen with imputed values
-            continue
+        #    continue
 
-        sections = assign_section(frame, new_bird_x, new_bird_y, new_wall_x)
-        for section in sections.values():
-            total_frame_counts[section] += 1
-        #labeled_result = assign_section_ys(frame, new_bird_x, new_bird_y, wx_avg)
-        #labeled_result = assign_section_xs(labeled_result)
-        # Count frames by section
-        #frame_counts = count_frames_by_section(labeled_result)
-        # Update total frame counts
-        #for section, count in frame_counts.items():
-        #    total_frame_counts[section] += count
+        #sections = assign_section(frame, new_bird_x, new_bird_y, new_wall_x)
+        #for section in sections.values():
+        #    total_frame_counts[section] += 1
+        
 
 
     #################################
@@ -312,5 +297,5 @@ if __name__ == "__main__":
     
     video_directory = "data/original_videos"
     results, quality_metrics = extract(video_id, video_directory)
-    print(quality_metrics)
+    print(results)
 

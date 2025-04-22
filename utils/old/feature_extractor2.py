@@ -6,7 +6,7 @@ import json # For loading data
 
 # Import custom utility functions
 # Note: utils2.py is now inside the utils folder
-from utils.utils2 import (
+from utils.old.utils2 import (
     get_best_detection,
     identify_and_number_exploration_perches,
     find_bird_location,
