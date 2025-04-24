@@ -11,8 +11,8 @@ def validate_data(video_id, json_path, manual_csv_path='data/Manually annotated 
         data = json.load(f)
 
     # Extract features
-    extracted_features = extract_from_data(data, video_id=video_id, nframes=len(data), fps=fps)
-    df_perches, df_sections = extracted_features
+    extracted_features = extract_from_data(data['frames'], video_id=video_id, nframes=len(data['frames']), fps=fps)
+    df_perches, df_sections, perching_result = extracted_features
 
     # Load the manually annotated CSV file
     df_manual = pd.read_csv(manual_csv_path, sep='|', encoding='latin1')
@@ -25,7 +25,9 @@ def validate_data(video_id, json_path, manual_csv_path='data/Manually annotated 
     except:
         ringnr = video_id
 
-    df_manual_filtered = df_manual[df_manual["Ringnr"] == ringnr][
+    print(f"Ring number: {ringnr}")
+
+    df_manual_filtered = df_manual[df_manual["ï»¿Ringnr"] == ringnr][
         ['Top_time', 'Middle_time', 'Bottom_time', 'Time_exploration', 'Time_homeside']
     ]
     df_manual_filtered = df_manual_filtered.astype(float)
@@ -50,4 +52,14 @@ def validate_data(video_id, json_path, manual_csv_path='data/Manually annotated 
     # Calculate error
     error = (combined_df.loc['Manual'] - combined_df.loc['Detected'])
 
-    return combined_df, error
+    # Append the errors with the video_id
+    error['video_id'] = video_id
+
+    # Convert the error Series to a DataFrame for easier appending
+    if isinstance(error, pd.DataFrame):
+        error_df = error
+    else:
+        error_df = error.to_frame().T
+    # error_df = error.to_frame().T   
+
+    return combined_df, error, error_df
