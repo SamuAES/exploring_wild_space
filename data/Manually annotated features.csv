@@ -1,4 +1,4 @@
-﻿Ringnr|NestID|Location|Total_time|P1_time|P2_time|P3_time|P4_time|P5_time|perches5_time|Bottom_time|Middle_time|Top_time|Time_exploration|Time_homeside|Ground_time|Latency_time|Explored|Moves_homeside|Moves_exploration|Mov_sum
+﻿Ringnr|NestID|Location|Total_time|perch1|perch2|perch3|perch4|perch5|5perches|Bottom|Middle|Top|T_new|T_home|ground|latency|Explored|move_home|movement|Mov_sum
 7894357|20KR49||600.242|0|0|12.401|43.205|46.043|NA|7.689|287.307|305.198|101.655|498.587|0|600.242|y|106|8|114
 8412996||Kodderviken|600.453|12.708|6.452|92.355|0|14.365|NA|0|165.069|435.373|125.887|474.566|0|457.138|y|45|9|54
 15582308|21JJ2||600|0|0|0|0|0|NA|0|2.999|596.989|0|600|0|600|n|55|0|55

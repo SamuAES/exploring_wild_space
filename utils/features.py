@@ -6,45 +6,37 @@ from utils.quality_functions import detect_movement, bird_inbetween_sections, bi
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import os # Added import for os module
 
 
-def bird_and_wall_positions(data:dict, frame_count:int, window_size_mean:int):
-    """
-    Extracts the bird and wall positions from the raw data.
-    
-    Parameters
-    ----------
-    data : dict
-        Dictionary containing the data of frames.
-    frame_count : int
-        Number of frames in the video.
-    window_size_mean : int
-        Size of the sliding window for averaging.
-    
-    Returns
-    -------
-    bird_x, bird_y, wall_x, wall_y : tuple
-        Tuple of arrays containing the bird and wall positions.
-    """
-    # Extract bird and wall position from json file
-    bird_x, bird_y, wall_x, wall_y = extract_bird_and_wall_coordinates(data, frame_count)
-    # Apply sliding average and data imputation to bird and wall positions
-    bird_x = sliding_mean(impute_data(bird_x), window_size_mean)
-    bird_y = sliding_mean(impute_data(bird_y), window_size_mean)
-    wall_x = sliding_mean(impute_data(wall_x), window_size_mean)
-    wall_y = sliding_mean(impute_data(wall_y), window_size_mean)
-    return bird_x, bird_y, wall_x, wall_y
-
+# Extracts features from a given JSON file and saves them to a CSV file.
+#################################################################################################
+# feature_name | type       | description                                                       #
+# ----------------------------------------------------------------------------------------------#
+# latency	    duration    first time entering new area                                        #
+# 5perches	    duration	time from entering to visit the 5th perch                           #
+# ground	    duration	time spent on ground                                                #
+# perch1	    duration	time spent on perch1	                                            #   
+# perch2	    duration	time spent on perch2                                                #
+# perch3	    duration	time spent on perch3                                                # 
+# perch4	    duration	time spent on perch4                                                #
+# perch5	    duration	time spent on perch5                                                # 
+# movements	    event	    number of hops and flights in novel area                            #
+# back_home	    event	    first time when going back to home side after entering novel area   #
+# T_new	        duration	total time spent in new area                                        #
+# move_home	    event	    number of movements in home side whole period                       #
+# Top	        duration	Top part cage                                                       #
+# Middle	    duration	Middle part cage                                                    #
+# Bottom	    duration	Bottom part cage                                                    #
+# Fence	        duration	Bird against mesh                                                   #
+#################################################################################################
 
 def extract_features(data_raw:dict,
                      window_size_mean:int,
                      window_size_mode:int,
                      fps:int,
                      frame_count:int,
-                     bird_x:np.array,
-                     bird_y:np.array,
-                     wall_x:np.array,
-                     wall_y:np.array) -> pd.DataFrame:
+                     ) -> pd.DataFrame:
 
     """
     Extracts features from the raw data and returns a DataFrame with the results.
@@ -78,21 +70,32 @@ def extract_features(data_raw:dict,
         DataFrame containing the quality metrics.
     """
 
+    # Extract bird and wall position from json file
+    bird_x, bird_y, wall_x, wall_y = extract_bird_and_wall_coordinates(data_raw["frames"], frame_count)
+    # Apply sliding average and data imputation to bird and wall positions
+    bird_x = sliding_mean(impute_data(bird_x), window_size_mean)
+    bird_y = sliding_mean(impute_data(bird_y), window_size_mean)
+    wall_x = sliding_mean(impute_data(wall_x), window_size_mean)
+    wall_y = sliding_mean(impute_data(wall_y), window_size_mean)
+
+
     ##########################
     # Perches initialization #
     ##########################
+    # Check 30 first frames and try to identify perches.
+    # Requirement is that we find 5 distinct perches on left side of wall and 3 on the right side.  
     try_n = 1
-    while try_n < 10:
+    while try_n < 30:
         try: 
             initial_perch_positions = identify_and_number_perches(data_raw['frames'][f"frame{try_n}"], wall_x[try_n-1])
             perches_x1, perches_y1, perches_x2, perches_y2, perches_x_center, perches_y_center = initialize_coordinate_arrays(initial_perch_positions)
             break
         except ValueError as e:
-            print(f"Unable to identify perches from frame{try_n}: {e}. Retrying...")
+            print(f"Unable to identify all 8 perches from frame{try_n}: {e}. Retrying...")
             try_n += 1
             continue
-    if try_n == 10:
-        raise ValueError("Unable to identify perches after 10 attempts. Please check the data.")
+    if try_n == 30:
+        raise ValueError("Unable to identify all 8 perches after 30 frames. Please check the data.")
 
     # Create empty arrays for storing intermediate results
     perching_result = np.zeros(frame_count) # final result: 1-8 for each of 8 perches, -1 for fence, -2 for floor, 0 for other
@@ -278,3 +281,44 @@ def extract_features(data_raw:dict,
     df_out["movements"] = hops_expl
 
     return df_out, quality_metrics
+
+
+def save_features_to_csv(features_df: pd.DataFrame, 
+                         quality_df: pd.DataFrame, 
+                         base_filename: str, 
+                         output_dir: str):
+    """
+    Saves the extracted features and quality metrics DataFrames to CSV files.
+
+    Parameters
+    ----------
+    features_df : pd.DataFrame
+        DataFrame containing the extracted features.
+    quality_df : pd.DataFrame
+        DataFrame containing the quality metrics.
+    base_filename : str
+        The base name for the output files (e.g., derived from the input video/JSON name).
+    output_dir : str
+        The directory where the CSV files will be saved.
+    """
+    # Ensure the output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Construct file paths
+    features_filepath = os.path.join(output_dir, f"{base_filename}_features.csv")
+    quality_filepath = os.path.join(output_dir, f"{base_filename}_quality.csv")
+
+    # Save DataFrames to CSV
+    try:
+        features_df.to_csv(features_filepath, index=False)
+        print(f"Saved features to: {features_filepath}")
+    except Exception as e:
+        print(f"Error saving features to {features_filepath}: {e}")
+
+    try:
+        quality_df.to_csv(quality_filepath, index=False)
+        print(f"Saved quality metrics to: {quality_filepath}")
+    except Exception as e:
+        print(f"Error saving quality metrics to {quality_filepath}: {e}")
+
+

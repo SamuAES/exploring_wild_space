@@ -8,6 +8,9 @@ import pandas as pd
 
 def load_video(video_filepath:str):
     """
+    This function loads a video file using OpenCV and prints some information about the video.
+    It returns a cv2.VideoCapture object that can be used to read frames from the video.
+
     Parameters
     ----------
     video_filepath : str
@@ -18,19 +21,28 @@ def load_video(video_filepath:str):
     cv2.VideoCapture object
     """
     vcap = cv2.VideoCapture(video_filepath)
-    if vcap.isOpened():
-        print("video:", basename(video_filepath))
-        print("frame count:", vcap.get(cv2.CAP_PROP_FRAME_COUNT))
-        print("frame width:", vcap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        print("frame height:", vcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        print("fps:", vcap.get(cv2.CAP_PROP_FPS))
-    else:
-        raise ValueError("VideoCapture did not succeed")
+    try:
+        if not vcap.isOpened():
+            raise ValueError("Could not open video file")
+    except ValueError as e:
+        print(e)
+        return None
+    
     cv2.destroyAllWindows()
     return vcap
 
 def read_video(video_capture:cv2.VideoCapture, model_path:str):
     """
+    This function reads frames from a video file using OpenCV and runs YOLO detection on each frame.
+    It returns a generator that yields a dictionary containing the results of YOLO detection for each frame.
+    The dictionary contains the following information:
+    - class: the class of the box
+    - confidence: the confidence score of the box
+    - x1: the x-coordinate of the top-left corner of the box
+    - y1: the y-coordinate of the top-left corner of the box
+    - x2: the x-coordinate of the bottom-right corner of the box
+    - y2: the y-coordinate of the bottom-right corner of the box
+
     Parameters
     ----------
     video_capture : cv2.VideoCapture object
@@ -40,7 +52,8 @@ def read_video(video_capture:cv2.VideoCapture, model_path:str):
 
     Returns
     -------
-    Generator that yields a dictionary per frame.
+    generator
+        A generator that yields a dictionary containing the results of YOLO detection for each frame.
     """
     model = YOLO(model_path)
     while True:
@@ -70,6 +83,38 @@ def read_video(video_capture:cv2.VideoCapture, model_path:str):
 
 
 def read_video_and_save_frames_to_json(video_filepath:str, save_path:str, model_path:str, max_frames = None):        
+    """
+    This function reads a video file, runs YOLO detection on each frame, and saves the results to a JSON file.
+    The JSON file contains the following information:
+    - video_filename: the name of the video file
+    - frame_count: the number of frames in the video
+    - frame_width: the width of the frames in the video
+    - frame_height: the height of the frames in the video
+    - fps: the frames per second of the video
+    - frames: a dictionary containing the results of YOLO detection for each frame
+        - frameX: a dictionary containing the boxes detected in frame X
+            - class: the class of the box
+            - confidence: the confidence score of the box
+            - x1: the x-coordinate of the top-left corner of the box
+            - y1: the y-coordinate of the top-left corner of the box
+            - x2: the x-coordinate of the bottom-right corner of the box
+            - y2: the y-coordinate of the bottom-right corner of the box
+
+    Parameters
+    ----------
+    video_filepath : str
+        Relative path to the video file.
+    save_path : str
+        Path where the JSON file will be saved.
+    model_path : str
+        Relative path to YOLO model.
+    max_frames : int, optional
+        Maximum number of frames to process. If None, all frames will be processed.
+
+    Returns
+    -------
+    None
+    """
     
     video_capture = load_video(video_filepath)
     if max_frames is None:
@@ -104,17 +149,69 @@ def read_video_and_save_frames_to_json(video_filepath:str, save_path:str, model_
         json.dump(result, json_file, indent=4)
 
 def load_json_to_dict(json_filepath:str):
+    """
+    This function loads a JSON file and returns its contents as a dictionary.
+    Parameters
+    ----------
+    json_filepath : str
+        Relative path to the JSON file.
+    Returns
+    -------
+    dict
+        A dictionary containing the contents of the JSON file.
+    """
     with open(json_filepath, "r") as json_file:
         raw_dict = json.load(json_file)
     return raw_dict
 
 
 def process_box(box:dict, row_index:int, num:int):
+    """
+    This function processes a single box and returns a DataFrame containing the box information.
+    The DataFrame contains the following columns:
+    - class: the class of the box
+    - confidence: the confidence score of the box
+    - x1: the x-coordinate of the top-left corner of the box
+    - y1: the y-coordinate of the top-left corner of the box
+    - x2: the x-coordinate of the bottom-right corner of the box
+    - y2: the y-coordinate of the bottom-right corner of the box
+    Parameters
+    ----------
+    box : dict
+        A dictionary containing the box information.
+    row_index : int
+        The index of the row in the DataFrame.
+    num : int
+        A number used to separate different boxes of the same class.
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing the box information.
+    """
     df = pd.DataFrame(box, index=[row_index])
     df.columns = [col + "_" + str(num) for col in df.columns]
     return df
 
 def process_raw_data(data:dict):
+    """
+    This function processes the raw data from the JSON file and returns four DataFrames:
+    - bird_df: a DataFrame containing the information of all birds detected in the video
+    - wall_df: a DataFrame containing the information of all walls detected in the video
+    - fence_df: a DataFrame containing the information of all fences detected in the video
+    - perch_df: a DataFrame containing the information of all perches detected in the video
+    Parameters
+    ----------
+    data : dict
+        A dictionary containing the raw data from the JSON file.
+    Returns
+    -------
+    tuple
+        A tuple containing four DataFrames:
+        - bird_df: a DataFrame containing the information of all birds detected in the video
+        - wall_df: a DataFrame containing the information of all walls detected in the video
+        - fence_df: a DataFrame containing the information of all fences detected in the video
+        - perch_df: a DataFrame containing the information of all perches detected in the video
+    """
     # Initialize empty dataframes
     bird_df = pd.DataFrame()
     wall_df = pd.DataFrame()

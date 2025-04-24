@@ -1,7 +1,33 @@
 import numpy as np
 
 def assign_section(perches_y1, perches_y2, bird_x, bird_y, wall_x):
-    #Get the average y1 and y2 coordinates of the perches.
+    """
+    Assign the section of the cage where the bird is located based on its coordinates and
+    the middle wall coordinates.
+    
+    Parameters
+    ----------
+    perches_y1 : np.ndarray
+        Array of size (10,8) y-coordinates for the top of the perches.
+    perches_y2 : np.ndarray
+        Array of size (10,8) y-coordinates for the bottom of the perches.
+    bird_x : float
+        Middle x-coordinate of the bird.
+    bird_y : float
+        Middle Y-coordinate of the bird.
+    wall_x : float
+        Middle x-coordinate of the wall.
+
+    Returns
+    -------
+    dict
+        Dictionary with the section of the cage where the bird is located.
+        Keys are 'section_x' with value 'T_new'/'T_home' and 'section_y'
+        with value 'top'/'middle'/'bottom'.
+    """
+    #
+    # Get the average y1 and y2 coordinates of the perches.
+
     # y1 is top and y2 is bottom, y1 < y2
     perches_y1_avg = np.nanmean(perches_y1, axis=0).mean()
     perches_y2_avg = np.nanmean(perches_y2, axis=0).mean()
