@@ -66,6 +66,8 @@ def extract_features(data_raw:dict,
     -------
     df_out : pd.DataFrame
         DataFrame containing the extracted features.
+    bird_status : np.array
+        Array containing the status of the bird for each frame (1-8 for each of 8 perches, -1 for fence, -2 for floor, 0 for other).
     quality_metrics : pd.DataFrame
         DataFrame containing the quality metrics.
     """
@@ -100,7 +102,7 @@ def extract_features(data_raw:dict,
         raise ValueError("Unable to identify all 8 perches after 30 frames. Please check the data.")
 
     # Create empty arrays for storing intermediate results
-    perching_result = np.zeros(frame_count) # final result: 1-8 for each of 8 perches, -1 for fence, -2 for floor, 0 for other
+    bird_status = np.zeros(frame_count, dtype=int) # final result: 1-8 for each of 8 perches, -1 for fence, -2 for floor, 0 for other
 
     # Initialize perch and wall coordinates
     # The set tracks which perches (1-5) have been visited
@@ -168,7 +170,7 @@ def extract_features(data_raw:dict,
             bird_action = bird_on_perch_2_or_3(new_bird_x, new_bird_y, perches_x1, perches_y1, perches_x2, perches_y2, perches_x_center, perches_y_center)
 
         # Update property arrays
-        perching_result[ind] = bird_action
+        bird_status[ind] = int(bird_action)
         
         # Computation of 5perches:
         # Remove perch number from reference set (does nothing if number is not present)
@@ -219,8 +221,8 @@ def extract_features(data_raw:dict,
     ####################
 
     # Compute features. Boris helpdoc only asks for perches 1-5, but here are 6-8 as well
-    perch1, perch2, perch3, perch4, perch5, perch6, perch7, perch8 = compute_perch_durations(perching_result, fps)
-    ground, fence = compute_ground_and_fence(perching_result, fps)
+    perch1, perch2, perch3, perch4, perch5, perch6, perch7, perch8 = compute_perch_durations(bird_status, fps)
+    ground, fence = compute_ground_and_fence(bird_status, fps)
     five_perches = five_perches_timer/fps
     # Turn features into dataframe
     features_perches = {
@@ -265,15 +267,12 @@ def extract_features(data_raw:dict,
 
 
     
-    # Remove elements which correspond to unknown action <- what, why?
-    action_mask = perching_result != 0
-    actions = perching_result[action_mask]
     # Array indicating the side of the cage that the bird is in
-    sides = determine_side(bird_x, wall_x)[action_mask]
+    sides = determine_side(bird_x, wall_x)
     # Take sliding mode of actions array
-    actions = sliding_mode(actions, window_size_mode)
+    smoothed_bird_status = sliding_mode(bird_status, window_size_mode)
     # Count the number of hops in home and exploration sides
-    hops_home, hops_expl = count_hops(actions, sides)
+    hops_home, hops_expl = count_hops(smoothed_bird_status, sides)
 
     # Compute total travelled distance
     #d = compute_distance(bird_x, bird_y)
@@ -285,10 +284,11 @@ def extract_features(data_raw:dict,
     df_out["move_home"] = hops_home
     df_out["movements"] = hops_expl
 
-    return df_out, quality_metrics
+    return df_out, bird_status, quality_metrics
 
 
-def save_features_to_csv(features_df: pd.DataFrame, 
+def save_features_to_csv(features_df: pd.DataFrame,
+                         bird_status: np.array, 
                          quality_df: pd.DataFrame, 
                          base_filename: str, 
                          output_dir: str):
@@ -311,14 +311,21 @@ def save_features_to_csv(features_df: pd.DataFrame,
 
     # Construct file paths
     features_filepath = os.path.join(output_dir, f"{base_filename}_features.csv")
+    bird_filepath = os.path.join(output_dir, f"{base_filename}_bird.csv")
     quality_filepath = os.path.join(output_dir, f"{base_filename}_quality.csv")
 
-    # Save DataFrames to CSV
+    # Save results to CSV
     try:
         features_df.to_csv(features_filepath, index=False)
         print(f"Saved features to: {features_filepath}")
     except Exception as e:
         print(f"Error saving features to {features_filepath}: {e}")
+
+    try:
+        pd.Series(bird_status).to_csv(bird_filepath, index=False, header=False)
+        print(f"Saved bird status to: {bird_filepath}")
+    except Exception as e:
+        print(f"Error saving bird status to {bird_filepath}: {e}")
 
     try:
         quality_df.to_csv(quality_filepath, index=False)
