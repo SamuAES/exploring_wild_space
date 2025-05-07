@@ -28,6 +28,8 @@ def extract_bird_and_wall_coordinates(dict_full, frame_count):
     bird_y = np.zeros(frame_count)
     wall_x = np.zeros(frame_count)
     wall_y = np.zeros(frame_count)
+    wall_y1 = np.zeros(frame_count)
+    wall_y2 = np.zeros(frame_count)
     # Loop over frames
     for index in range(frame_count):
         # Pick dict corresponding to current frame
@@ -62,12 +64,16 @@ def extract_bird_and_wall_coordinates(dict_full, frame_count):
                 if curr_conf > prev_conf:
                     wall_x[index] = int((wall["x1"] + wall["x2"]) / 2)
                     wall_y[index] = int((wall["y1"] + wall["y2"]) / 2)
+                    wall_y1[index] = int(wall["y1"])
+                    wall_y2[index] = int(wall["y2"])
                 prev_conf = curr_conf
         # If no wall was detected, assign NaNs
         else:
             wall_x[index] = np.nan
             wall_y[index] = np.nan
-    return bird_x, bird_y, wall_x, wall_y
+            wall_y1[index] = np.nan
+            wall_y2[index] = np.nan
+    return bird_x, bird_y, wall_x, wall_y, wall_y1, wall_y2
 
 
 def sliding_mean(x: np.array, window_size: int = 15):

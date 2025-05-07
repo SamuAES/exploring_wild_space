@@ -1,6 +1,6 @@
 from utils.movement_functions import extract_bird_and_wall_coordinates, sliding_mean, impute_data, compute_distance, count_hops, determine_side, sliding_mode
 from utils.perching import identify_and_number_perches, initialize_coordinate_arrays, update_perch_coordinates, find_bird_on_perch, bird_on_fence, bird_on_perch_2_or_3, compute_perch_durations, compute_ground_and_fence
-from utils.sections import assign_section, convert_frame_counts_to_time
+from utils.sections import assign_section, assign_section_from_wall, convert_frame_counts_to_time
 from utils.quality_functions import detect_movement, bird_inbetween_sections, bird_between_perch_2_3, perches_within_threshold
 
 import numpy as np
@@ -71,12 +71,14 @@ def extract_features(data_raw:dict,
     """
 
     # Extract bird and wall position from json file
-    bird_x, bird_y, wall_x, wall_y = extract_bird_and_wall_coordinates(data_raw["frames"], frame_count)
+    bird_x, bird_y, wall_x, wall_y, wall_y1, wall_y2 = extract_bird_and_wall_coordinates(data_raw["frames"], frame_count)
     # Apply sliding average and data imputation to bird and wall positions
     bird_x = sliding_mean(impute_data(bird_x), window_size_mean)
     bird_y = sliding_mean(impute_data(bird_y), window_size_mean)
     wall_x = sliding_mean(impute_data(wall_x), window_size_mean)
     wall_y = sliding_mean(impute_data(wall_y), window_size_mean)
+    wall_y1 = sliding_mean(impute_data(wall_y1), window_size_mean)
+    wall_y2 = sliding_mean(impute_data(wall_y2), window_size_mean)
 
 
     ##########################
@@ -141,6 +143,8 @@ def extract_features(data_raw:dict,
         new_bird_x = bird_x[ind]
         new_bird_y = bird_y[ind]
         new_wall_x = wall_x[ind]
+        new_wall_y1 = wall_y1[ind]
+        new_wall_y2 = wall_y2[ind]
         
         numbered_perches = identify_and_number_perches(frame, new_wall_x)
 
@@ -179,7 +183,8 @@ def extract_features(data_raw:dict,
         # Sections #
         ############
         # Assign sections
-        sections = assign_section(perches_y1, perches_y2, new_bird_x, new_bird_y, new_wall_x)
+        # sections = assign_section(perches_y1, perches_y2, new_bird_x, new_bird_y, new_wall_x)
+        sections = assign_section_from_wall(new_bird_x, new_bird_y, new_wall_x, new_wall_y1, new_wall_y2)
         for section in sections.values():
             total_frame_counts[section] += 1
             # Check if bird is in the new area

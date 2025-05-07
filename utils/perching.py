@@ -30,7 +30,7 @@ def identify_and_number_perches(frame_data, wall_x):
     stick_detections_right = []
 
     for key, value in frame_data.items():
-        if value.get("class") == "stick" and value.get("confidence") >= 0.6: # Set confidence threshold
+        if value.get("class") == "stick" and value.get("confidence") >= 0.7: # Set confidence threshold
             center_x = (value['x1'] + value['x2']) / 2
             # Check if the stick is on the exploration side (left of the wall)
             value['center_x'] = center_x
