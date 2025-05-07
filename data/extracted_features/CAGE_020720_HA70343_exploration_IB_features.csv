@@ -1,2 +1,2 @@
-perch1,perch2,perch3,perch4,perch5,5perches,fence,ground,top,middle,bottom,T_new,T_home,latency,back_home,move_home,movements,identifier
-0.0,0.0,0.0,0.0,0.0,147.43333333333334,329.6666666666667,0.0,599.47,0.47,0.0,147.43,452.5,413.7,529.5,0,0,CAGE_020720_HA70343_exploration_IB
+perch1,perch2,perch3,perch4,perch5,5perches,fence,ground,top,middle,bottom,T_new,T_home,latency,back_home,move_home,movements,home_perches_identified,identifier
+0.0,0.0,33.6,75.93333333333334,36.3,147.43333333333334,329.6666666666667,0.0,170.07,429.87,0.0,147.43,452.5,413.7,529.5,3,9,0,CAGE_020720_HA70343_exploration_IB

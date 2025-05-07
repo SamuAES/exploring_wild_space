@@ -87,19 +87,49 @@ def extract_features(data_raw:dict,
     # Perches initialization #
     ##########################
     # Check 30 first frames and try to identify perches.
-    # Requirement is that we find 5 distinct perches on left side of wall and 3 on the right side.  
+    # Requirement is that we find 5 distinct perches on left (exploration) side of wall.
+    # Home side (right) perches (3 perches) are optional. If not all 3 are found, they are ignored.
     try_n = 1
+    initial_left_perches = None
+    initial_right_perches = {} # Default to empty
+    home_perches_fully_identified = False # Flag to track if home perches are used
+
     while try_n < 30:
-        try: 
-            initial_perch_positions = identify_and_number_perches(data_raw['frames'][f"frame{try_n}"], wall_x[try_n-1])
-            perches_x1, perches_y1, perches_x2, perches_y2, perches_x_center, perches_y_center = initialize_coordinate_arrays(initial_perch_positions)
-            break
+        try:
+            # identify_and_number_perches is expected to return two dictionaries:
+            # left_perches_dict, right_perches_dict
+            # It should raise ValueError if len(left_perches_dict) < 5.
+            exploration_perches, home_perches = identify_and_number_perches(data_raw['frames'][f'frame{try_n}'], wall_x[try_n-1])
+
+            if len(exploration_perches) == 5: # Core requirement: 5 exploration perches
+                initial_left_perches = exploration_perches
+                if len(home_perches) == 3: # Optional: 3 home perches
+                    initial_right_perches = home_perches
+                    home_perches_fully_identified = True
+                    print(f"Successfully identified all 5 exploration perches and 3 home perches from frame{try_n}.")
+                else:
+                    initial_right_perches = {} # Ensure it's empty if not all 3 found
+                    print(f"Successfully identified 5 exploration perches from frame{try_n}. Only {len(home_perches)}/3 home perches found; home perches will be ignored.")
+                break # Exit loop once exploration perches are found
+            else:
+                # This case implies identify_and_number_perches did not raise an error but returned < 5 left perches.
+                # Or, if it does raise an error, this part is defensive.
+                raise ValueError(f"Found {len(exploration_perches)}/5 exploration perches.")
+
         except ValueError as e:
-            print(f"Unable to identify all 8 perches from frame{try_n}: {e}. Retrying...")
+            print(f"Unable to identify perches from frame{try_n}: {e}. Retrying...")
             try_n += 1
             continue
+
     if try_n == 30:
-        raise ValueError("Unable to identify all 8 perches after 30 frames. Please check the data.")
+        raise ValueError("Unable to identify all 5 exploration perches after 30 frames.")
+
+    
+    # Initialize coordinate arrays for 8 perches, with NaNs for missing ones.
+    perches_x1, perches_y1, perches_x2, perches_y2, perches_x_center, perches_y_center = initialize_coordinate_arrays(
+        initial_left_perches, 
+        initial_right_perches # Pass empty dict if home perches are ignored
+    )
 
     # Create empty arrays for storing intermediate results
     bird_status = np.zeros(frame_count, dtype=int) # final result: 1-8 for each of 8 perches, -1 for fence, -2 for floor, 0 for other
@@ -148,11 +178,21 @@ def extract_features(data_raw:dict,
         new_wall_y1 = wall_y1[ind]
         new_wall_y2 = wall_y2[ind]
         
-        numbered_perches = identify_and_number_perches(frame, new_wall_x)
+        exploration_perches, home_perches = identify_and_number_perches(frame, new_wall_x)
+        #numbered_perches = exploration_perches + home_perches # Merge lists
 
         # Update coordinates of perches
         perches_x1, perches_y1, perches_x2, perches_y2, perches_x_center, perches_y_center = update_perch_coordinates(
-            perches_x1, perches_y1, perches_x2, perches_y2, perches_x_center, perches_y_center, numbered_perches, ind)
+            perches_x1,
+            perches_y1,
+            perches_x2,
+            perches_y2,
+            perches_x_center,
+            perches_y_center,
+            exploration_perches,
+            home_perches,
+            ind,
+            home_perches_fully_identified)
         
         # Moving averages
         px_moving_avgs = np.nanmean(perches_x_center, axis=0)
@@ -163,7 +203,7 @@ def extract_features(data_raw:dict,
         fence_status[ind%10] = bird_on_fence(frame)
 
         # Find if the bird is on a perch/fence, and which one
-        bird_action = find_bird_on_perch(px_moving_avgs, py2_moving_avgs, new_bird_x, new_bird_y, fence_status)
+        bird_action = find_bird_on_perch(px_moving_avgs, py2_moving_avgs, new_bird_x, new_bird_y, fence_status, new_wall_x, home_perches_fully_identified)
         
         # check if perch is 2 or 3 and apply special logic
         if bird_action == 2 or bird_action == 3:
@@ -283,6 +323,10 @@ def extract_features(data_raw:dict,
     #df_out["d"] = d
     df_out["move_home"] = hops_home
     df_out["movements"] = hops_expl
+    if home_perches_fully_identified:
+        df_out["home_perches_identified"] = 1
+    else:
+        df_out["home_perches_identified"] = 0
 
     return df_out, bird_status, quality_metrics
 

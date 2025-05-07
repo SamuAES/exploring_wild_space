@@ -1,2 +1,2 @@
-perch1,perch2,perch3,perch4,perch5,5perches,fence,ground,top,middle,bottom,T_new,T_home,latency,back_home,move_home,movements,identifier
-116.13333333333334,78.16666666666667,109.9,37.7,54.4,10.066666666666666,17.2,0.2,267.6,326.77,5.93,415.6,184.7,17.8,58.13333333333333,55,91,HE21364_110721_21NB25_exploration_IB
+perch1,perch2,perch3,perch4,perch5,5perches,fence,ground,top,middle,bottom,T_new,T_home,latency,back_home,move_home,movements,home_perches_identified,identifier
+116.13333333333334,78.16666666666667,109.9,37.7,54.4,10.066666666666666,17.2,0.0,267.6,326.77,5.93,415.6,184.7,17.8,58.13333333333333,57,91,1,HE21364_110721_21NB25_exploration_IB
