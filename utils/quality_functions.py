@@ -3,23 +3,43 @@ import numpy as np
 
 def detect_movement(previous_coordinates, current_coordinates, new_coordinates):
     '''
-    Some bugs still
+    Detects movement of perches based on their coordinates and returns True 
+    if movement is detected otherwise returns False
+
+    Parameters
+    ----------
+    previous_coordinates: NumPy array
+    current_coordinates: NumPy array
+    new_coordinates: List
+
+    Returns
+    -------
+    Boolean
     '''
     diff = np.abs(previous_coordinates - current_coordinates)
     # If there are more than two perches that have moved horizontally by 10 pixels 
-    if len(diff[diff > 10]) > 1:
+    if len(diff[diff > 30]) > 1:
         return True
     # In the case when the camera moves so much that yolo does not detect all the perches and 
     # thus does not update the perch coordinates
-    if np.count_nonzero(~np.isnan(previous_coordinates)) > len(new_coordinates) + 1:
+    if 4 > len(new_coordinates):
         return True
 
     return False
 
 def perches_within_threshold(perch_coodinates, threshold=50):
     '''
-    Returns True when there are at least two perches separated by less than
-    the threshold value
+    Detects is there are at least two perches separated by 
+    less than the threshold value
+
+    Parameters
+    ----------
+    perch_coodinates: NumPy array
+    threshold: Int
+
+    Returns
+    -------
+    Boolean
     '''
     aa, bb = np.meshgrid(perch_coodinates, perch_coodinates)
 
@@ -31,26 +51,21 @@ def perches_within_threshold(perch_coodinates, threshold=50):
         return True
     return False
 
-def too_many_perches_on_exploration_side(perch_coordinates, wall_coordiate, n=5): # Unused
-    if np.isnan(wall_coordiate):
-        return False
-    return n < len(perch_coordinates[perch_coordinates < wall_coordiate])
 
-def perch_assignment_failure(assigned_perches, perch_coordinates): # Unused
-    for perch in perch_coordinates:
-        if perch not in assigned_perches:
-            return True
-    
-    return False
-
-def perch_deviates_from_average(average_perch_coordinates, new_perch_coordinates, threshold=30): #Unused
-    dist = np.abs(average_perch_coordinates - new_perch_coordinates)
-
-    return len(dist[dist > 30]) > 0
-
-def bird_inbetween_sections(frame, bird_y_coordinate, threshold=30):
+def bird_inbetween_sections(frame, bird_y_coordinate, threshold=50):
     '''
-    Returns True if the bird is found on the threshold of either the top or bottom sections
+    Detects whether the bird is found on the threshold of either 
+    the top or the bottom section
+
+    Parameters
+    ----------
+    frame: Dict
+    bird_y_coordinate: Int
+    threshold: Int
+
+    Return
+    ------
+    Boolean
     '''
     #Get the average y1 and y2 coordinates of the perches.
     # y1 is top and y2 is bottom, y1 < y2
@@ -88,7 +103,19 @@ def bird_inbetween_sections(frame, bird_y_coordinate, threshold=30):
     
 def bird_between_perch_2_3(px_moving_avgs, py_moving_avgs, bird_x, bird_y, cage_status):
     '''
-    Returns True when the bird is found between perch two and three
+    Detects when the bird is found between perch two and three
+
+    Parameters
+    ----------
+    px_moving_avgs: NumPy array
+    py_moving_avgs: NumPy array
+    bird_x: Int
+    bird_y: Int
+    cage_status: Int
+
+    Return
+    ------
+    Boolean
     '''
     framecount = np.count_nonzero(~np.isnan(cage_status)) # how many non-nan values we have in cage_status
 

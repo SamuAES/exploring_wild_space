@@ -158,7 +158,7 @@ def extract_features(data_raw:dict,
     ###################################
     camera_movement = False
     perch_coordinates_movement = np.nan
-    number_of_manually_annotated_perches = np.count_nonzero(~np.isnan(perches_x_center[0, :5]))
+    
     close_perches = perches_within_threshold(perches_x_center[0, :5])
     inbetween_zones = 0
     inbetween_perches_2_3 = 0
@@ -244,10 +244,10 @@ def extract_features(data_raw:dict,
         # Quality measures #
         ####################
         # Detect camera movement
-        if (ind + 1) % 100 == 0 and not camera_movement:
+        if (ind + 1) % 300 == 0 and not camera_movement:
             if np.all(np.isnan(perch_coordinates_movement)):
                 perch_coordinates_movement = px_moving_avgs.copy()
-            camera_movement = detect_movement(perch_coordinates_movement, px_moving_avgs, perches_x_center)
+            camera_movement = detect_movement(perch_coordinates_movement, px_moving_avgs, exploration_perches)
             perch_coordinates_movement = px_moving_avgs.copy()
         # Detect if bird is on the threshold between two different sections
         if bird_inbetween_sections(frame, new_bird_y):
@@ -295,10 +295,13 @@ def extract_features(data_raw:dict,
     ###################
     # Quality results #
     ###################
-
+    if home_perches_fully_identified:
+        home_perches_tracked = 1
+    else:
+        home_perches_tracked = 0
     quality_values = {
         "camera_movement": camera_movement,
-        "perch_count": number_of_manually_annotated_perches,
+        "home_perches_identified": home_perches_tracked,
         "close_perches": close_perches,
         "bird_inbetween_zones": inbetween_zones/30,
         "bird_inbetween_perches": inbetween_perches_2_3/30
